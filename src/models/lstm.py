@@ -13,16 +13,14 @@ from src.utils.config import (
 
 class LSTMModel(nn.Module):
     """
-    2-layer Bidirectional LSTM for time series classification.
+    2-layer Bidirectional LSTM for time series classification (Pure Baseline).
 
     Architecture:
         Input:  (batch, 22, 120) → permute → (batch, 120, 22)
         LSTM: LSTM(22, 128, num_layers=2, bidirectional=True, batch_first=True)
         Hidden extraction: concat last forward/backward h_n → (batch, 256)
-        FC: Linear(256, 64) → ReLU → Dropout(0.3) → Linear(64, 7)
+        FC: Linear(256, 64) → ReLU → Linear(64, 7)
         Output: (batch, 7)  — logits for 7 classes
-
-    Parameter count: ~800K-1.5M
     """
 
     def __init__(self):
@@ -42,10 +40,10 @@ class LSTMModel(nn.Module):
 
         lstm_output_dim = lstm_hidden * 2 if lstm_bidirectional else lstm_hidden
 
+        # FC without Dropout (Pure Baseline)
         self.fc = nn.Sequential(
             nn.Linear(lstm_output_dim, 64),
             nn.ReLU(),
-            nn.Dropout(0.3),
             nn.Linear(64, N_CLASSES),
         )
 

@@ -10,49 +10,44 @@ import torch.nn.functional as F
 
 
 class CNNModel(nn.Module):
-    """3-block 1D CNN for time series classification.
+    """3-block 1D CNN for time series classification (Pure Baseline).
 
     Architecture:
         Input:  (batch, 22, 120)
-        Block1: Conv1d(22→64, k=3, p=1) → BatchNorm1d(64) → ReLU → MaxPool1d(2)
-        Block2: Conv1d(64→128, k=3, p=1) → BatchNorm1d(128) → ReLU → MaxPool1d(2)
-        Block3: Conv1d(128→256, k=3, p=1) → BatchNorm1d(256) → ReLU → MaxPool1d(2)
+        Block1: Conv1d(22→64, k=3, p=1) → ReLU → MaxPool1d(2)
+        Block2: Conv1d(64→128, k=3, p=1) → ReLU → MaxPool1d(2)
+        Block3: Conv1d(128→256, k=3, p=1) → ReLU → MaxPool1d(2)
         Pooling: AdaptiveAvgPool1d(1) → Flatten → (batch, 256)
-        FC: Linear(256, 128) → ReLU → Dropout(0.3) → Linear(128, 7)
+        FC: Linear(256, 128) → ReLU → Linear(128, 7)
         Output: (batch, 7) — raw logits for 7 classes
-
-    Parameter count: ~500K–1M
     """
 
     def __init__(self):
         super().__init__()
 
-        # Conv blocks
+        # Conv blocks without BatchNorm (Pure Baseline)
         self.block1 = nn.Sequential(
             nn.Conv1d(22, 64, kernel_size=3, padding=1),
-            nn.BatchNorm1d(64),
             nn.ReLU(),
             nn.MaxPool1d(kernel_size=2),
         )
         self.block2 = nn.Sequential(
             nn.Conv1d(64, 128, kernel_size=3, padding=1),
-            nn.BatchNorm1d(128),
             nn.ReLU(),
             nn.MaxPool1d(kernel_size=2),
         )
         self.block3 = nn.Sequential(
             nn.Conv1d(128, 256, kernel_size=3, padding=1),
-            nn.BatchNorm1d(256),
             nn.ReLU(),
             nn.MaxPool1d(kernel_size=2),
         )
 
         self.pool = nn.AdaptiveAvgPool1d(1)
 
+        # FC without Dropout (Pure Baseline)
         self.fc = nn.Sequential(
             nn.Linear(256, 128),
             nn.ReLU(),
-            nn.Dropout(0.3),
             nn.Linear(128, 7),
         )
 
