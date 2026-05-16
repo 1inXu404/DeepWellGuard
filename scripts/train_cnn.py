@@ -71,8 +71,8 @@ def _prepare_dataset(x_path: str, y_path: str, label_map: np.ndarray) -> Subset:
     keep_mask = np.isin(ds.labels, RETAINED_CLASSES)
     keep_indices = np.where(keep_mask)[0]
 
-    # Remap labels in-place (vectorised lookup)
-    ds.labels[:] = label_map[ds.labels]
+    # Remap labels (creates a new array in RAM, avoiding read-only mmap modification)
+    ds.labels = label_map[ds.labels]
 
     return Subset(ds, keep_indices)
 
@@ -131,11 +131,11 @@ def main() -> None:
         print("No cached fold data found. Run preprocess.py first.")
         sys.exit(1)
 
-    # ── 5-fold cross-validation ────────────────────────────────────────
+    # ── Single Fold Training (was 5-fold CV) ───────────────────────────────
     fold_accs: list[float] = []
     fold_models: list[CNNModel] = []
 
-    for fold in range(5):
+    for fold in range(1):
         if not _fold_cache_exists(fold):
             print(f"\n[SKIP] Fold {fold} — cache files not found.")
             continue
@@ -203,7 +203,7 @@ def main() -> None:
         mean_acc = float(np.mean(fold_accs))
         std_acc = float(np.std(fold_accs))
         print(f"\n{'=' * 50}")
-        print(f"  5-fold CV accuracy: {mean_acc:.4f} ± {std_acc:.4f}")
+        print(f"  Single fold CV accuracy: {mean_acc:.4f} ± {std_acc:.4f}")
         print(f"{'=' * 50}")
     else:
         print("\nNo folds were trained — nothing to evaluate.")

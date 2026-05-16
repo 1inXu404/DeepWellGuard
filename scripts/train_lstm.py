@@ -166,6 +166,8 @@ def main():
         sys.exit(1)
 
     print(f"Discovered {len(fold_indices)} fold(s): {fold_indices}")
+    print("Only using fold 0 for faster training.")
+    fold_indices = fold_indices[:1]
     print()
 
     # ======================================================================
@@ -199,8 +201,8 @@ def main():
         val_dataset = OilWellDataset(val_features_path, val_labels_path)
 
         # Remap labels (uses global label_map)
-        train_dataset.labels = np.array([label_map[l] for l in train_dataset.labels])
-        val_dataset.labels = np.array([label_map[l] for l in val_dataset.labels])
+        train_dataset.labels = np.array([label_map[lbl] for lbl in train_dataset.labels])
+        val_dataset.labels = np.array([label_map[lbl] for lbl in val_dataset.labels])
 
         # Load labels for balanced sampling
         train_labels = train_dataset.labels
@@ -306,7 +308,7 @@ def main():
             os.path.join(args.cache_dir, "test_y.npy"),
         )
         # Remap test labels
-        test_dataset.labels = np.array([label_map[l] for l in test_dataset.labels])
+        test_dataset.labels = np.array([label_map[lbl] for lbl in test_dataset.labels])
         test_loader = DataLoader(
             test_dataset,
             batch_size=args.batch_size,
@@ -347,14 +349,14 @@ def main():
 
             ensemble_metrics = compute_metrics(y_test, ensemble_preds, ensemble_probs)
 
-            print(f"\n    ── Ensemble Results ──")
+            print("\n    ── Ensemble Results ──")
             print(f"      Models in ensemble: {models_loaded}")
             print(f"      Accuracy:           {ensemble_metrics['accuracy']:.4f}")
             print(f"      Weighted F1:        {ensemble_metrics['weighted_f1']:.4f}")
             print(f"      Macro F1:           {ensemble_metrics['macro_f1']:.4f}")
 
             # Per-class metrics
-            print(f"\n    Per-class F1:")
+            print("\n    Per-class F1:")
             for cls_idx, f1_val in enumerate(ensemble_metrics["per_class_f1"]):
                 print(f"      Class {cls_idx}: {f1_val:.4f}")
 

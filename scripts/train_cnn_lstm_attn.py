@@ -74,11 +74,11 @@ def main() -> None:
     print(f"Seed:   {args.seed}")
     print(f"Epochs: {args.epochs}  |  Patience: {args.patience}  |  Batch size: {args.batch_size}")
 
-    # ── 5-fold cross-validation ────────────────────────────────────────
+    # ── Single Fold Training (was 5-fold CV) ───────────────────────────────
     fold_accs: list[float] = []
     fold_models: list[CNNLSTMAttention] = []
 
-    for fold in range(5):
+    for fold in range(1):
         if not _fold_cache_exists(fold):
             print(f"\n[SKIP] Fold {fold} — cache files not found.")
             continue
@@ -97,8 +97,8 @@ def main() -> None:
         )
 
         # Remap labels (uses global label_map)
-        train_ds.labels = np.array([label_map[l] for l in train_ds.labels])
-        val_ds.labels = np.array([label_map[l] for l in val_ds.labels])
+        train_ds.labels = np.array([label_map[lbl] for lbl in train_ds.labels])
+        val_ds.labels = np.array([label_map[lbl] for lbl in val_ds.labels])
 
         # Load labels for balanced sampling
         train_labels = train_ds.labels
@@ -144,7 +144,7 @@ def main() -> None:
         mean_acc = float(np.mean(fold_accs))
         std_acc = float(np.std(fold_accs))
         print(f"\n{'=' * 50}")
-        print(f"  CNN-LSTM-Attention 5-fold CV accuracy: {mean_acc:.4f} ± {std_acc:.4f}")
+        print(f"  CNN-LSTM-Attention Single fold CV accuracy: {mean_acc:.4f} ± {std_acc:.4f}")
         print(f"{'=' * 50}")
     else:
         print("\nNo folds were trained — nothing to evaluate.")
@@ -164,7 +164,7 @@ def main() -> None:
 
     test_ds = OilWellDataset(test_X_path, test_y_path)
     # Remap test labels too
-    test_ds.labels = np.array([label_map[l] for l in test_ds.labels])
+    test_ds.labels = np.array([label_map[lbl] for lbl in test_ds.labels])
     test_loader = DataLoader(
         test_ds, batch_size=args.batch_size, shuffle=False,
         pin_memory=use_cuda, num_workers=0,
