@@ -1,0 +1,53 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyc
+*.pyo
+*.pyd
+*.so
+*.egg-info/
+dist/
+build/
+*.egg
+
+# Environment
+.env
+venv/
+.venv/
+env/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# ML Project specific
+results/cache/
+.sisyphus/
+data/holdout_test/
+
+# Checkpoints / models (keep small test models, ignore large ones)
+*.pt
+*.pth
+*.onnx
+!examples/**/*.pt
+
+# Data
+data/raw/
+data/interim/
+*.csv
+*.parquet
+*.feather
+
+# Logs
+logs/
+*.log
+
+# Jupyter
+.ipynb_checkpoints/
+*/.ipynb_checkpoints/*
+
+# OS
+Thumbs.db
+.DS_Store
