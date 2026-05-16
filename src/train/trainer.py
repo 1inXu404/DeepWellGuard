@@ -292,7 +292,7 @@ class Trainer:
         unique, counts = np.unique(labels, return_counts=True)
         if unique.max() >= self.num_classes:
             label_map = {old: new for new, old in enumerate(sorted(unique))}
-            labels = np.array([label_map[l] for l in labels])
+            labels = np.array([label_map[lbl] for lbl in labels])
             unique, counts = np.unique(labels, return_counts=True)
         for lbl, cnt in zip(unique, counts):
             if lbl < self.num_classes:

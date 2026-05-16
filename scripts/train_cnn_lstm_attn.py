@@ -16,6 +16,7 @@ import argparse
 import os
 import random
 import sys
+from datetime import datetime
 
 import numpy as np
 import torch
@@ -60,7 +61,15 @@ def main() -> None:
         "--batch-size", type=int, default=BATCH_SIZE, help="Batch size"
     )
     parser.add_argument("--seed", type=int, default=SEED, help="Random seed")
+    parser.add_argument("--subset", type=float, default=1.0, help="Fraction of data to use (0.0-1.0) for faster training")
     args = parser.parse_args()
+
+    run_id = datetime.now().strftime("%Y%m%d_%H%M%S")
+    models_dir = os.path.join("results", "models", run_id)
+    metrics_dir = os.path.join("results", "metrics", run_id)
+    os.makedirs(models_dir, exist_ok=True)
+    os.makedirs(metrics_dir, exist_ok=True)
+    print(f"Run ID: {run_id}")
 
     # ── Set all seeds for reproducibility ──────────────────────────────
     torch.manual_seed(args.seed)
@@ -105,7 +114,13 @@ def main() -> None:
         class_counts = np.bincount(train_labels, minlength=7)
         class_counts = np.where(class_counts == 0, 1, class_counts)  # guard missing classes
         sample_weights = 1.0 / class_counts[train_labels]
-        sampler = WeightedRandomSampler(sample_weights, len(train_ds), replacement=True)
+        num_train_samples = int(len(train_ds) * args.subset)
+        sampler = WeightedRandomSampler(sample_weights, num_train_samples, replacement=True)
+
+        if args.subset < 1.0:
+            import torch
+            val_indices = np.random.choice(len(val_ds), int(len(val_ds) * args.subset), replace=False)
+            val_ds = torch.utils.data.Subset(val_ds, val_indices)
 
         train_loader = DataLoader(
             train_ds, batch_size=args.batch_size,
@@ -126,8 +141,8 @@ def main() -> None:
         )
 
         # Save model weights
-        os.makedirs("results/models", exist_ok=True)
-        ckpt_path = f"results/models/cnn_lstm_attn_fold{fold}.pt"
+        
+        ckpt_path = f"{models_dir}/cnn_lstm_attn_fold{fold}.pt"
         torch.save(model.state_dict(), ckpt_path)
         print(f"  Model saved → {ckpt_path}")
 
@@ -182,9 +197,9 @@ def main() -> None:
     test_preds = np.argmax(avg_probs, axis=1)  # (N,)
 
     # Save predictions
-    os.makedirs("results/metrics", exist_ok=True)
+    
     np.savez(
-        "results/metrics/cnn_lstm_attn_predictions.npz",
+        os.path.join(metrics_dir, "cnn_lstm_attn_predictions.npz"),
         preds=test_preds,
         probs=avg_probs,
         labels=test_ds.labels,

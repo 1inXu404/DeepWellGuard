@@ -4,7 +4,6 @@ Provides functions for computing accuracy, F1 scores, confusion matrices,
 classification reports, and saving results to CSV.
 """
 
-import numpy as np
 import pandas as pd
 from sklearn.metrics import (
     accuracy_score,

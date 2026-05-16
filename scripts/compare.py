@@ -31,12 +31,32 @@ def _resolve_key(data, *candidates):
     )
 
 
+import argparse
+
 def main():
-    models = [
-        ("CNN", "results/metrics/cnn_predictions.npz"),
-        ("LSTM", "results/metrics/lstm_predictions.npz"),
-        ("CNN-LSTM-Attention", "results/metrics/cnn_lstm_attn_predictions.npz"),
-    ]
+    parser = argparse.ArgumentParser(description="Compare model predictions.")
+    parser.add_argument(
+        "--models",
+        nargs="+",
+        default=["CNN", "LSTM", "CNN-LSTM-Attention"],
+        help="Names of models to compare. Prediction files must be in results/metrics/[name]_predictions.npz"
+    )
+    args = parser.parse_args()
+
+    # Map the model names to their expected prediction file paths
+    # Handle the specific name mapping used in training scripts
+    file_name_mapping = {
+        "CNN": "cnn",
+        "LSTM": "lstm",
+        "CNN-LSTM-Attention": "cnn_lstm_attn"
+    }
+
+    models = []
+    for m in args.models:
+        # Resolve the actual filename base
+        base_name = file_name_mapping.get(m, m.lower().replace(" ", "_").replace("-", "_"))
+        path = f"results/metrics/{base_name}_predictions.npz"
+        models.append((m, path))
 
     os.makedirs("results/metrics", exist_ok=True)
     os.makedirs("results/figures", exist_ok=True)

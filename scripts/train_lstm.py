@@ -8,6 +8,7 @@ Usage:
     python scripts/train_lstm.py --epochs 150 --batch-size 64 --lr 0.0005
 """
 import sys
+from datetime import datetime
 import os
 import argparse
 import time
@@ -75,6 +76,10 @@ def parse_args():
     parser.add_argument(
         "--seed", type=int, default=SEED,
         help="Random seed for reproducibility (default: %(default)s)"
+    )
+    parser.add_argument(
+        "--subset", type=float, default=1.0,
+        help="Fraction of data to use (0.0-1.0) for faster training"
     )
     return parser.parse_args()
 
@@ -154,8 +159,8 @@ def main():
     print()
 
     # Ensure output directories exist
-    os.makedirs(args.models_dir, exist_ok=True)
-    os.makedirs(args.metrics_dir, exist_ok=True)
+    os.makedirs(models_dir, exist_ok=True)
+    os.makedirs(metrics_dir, exist_ok=True)
 
     # Discover available folds from cache
     fold_indices = discover_folds(args.cache_dir)
@@ -209,7 +214,13 @@ def main():
         class_counts = np.bincount(train_labels, minlength=7)
         class_counts = np.where(class_counts == 0, 1, class_counts)  # guard missing classes
         sample_weights = 1.0 / class_counts[train_labels]
-        sampler = WeightedRandomSampler(sample_weights, len(train_dataset), replacement=True)
+        num_train_samples = int(len(train_dataset) * args.subset)
+        sampler = WeightedRandomSampler(sample_weights, num_train_samples, replacement=True)
+
+        if args.subset < 1.0:
+            import torch
+            val_indices = np.random.choice(len(val_dataset), int(len(val_dataset) * args.subset), replace=False)
+            val_dataset = torch.utils.data.Subset(val_dataset, val_indices)
 
         train_loader = DataLoader(
             train_dataset,
@@ -261,13 +272,13 @@ def main():
         print(f"      Training time:   {elapsed:.1f}s")
 
         # Save model weights
-        model_path = os.path.join(args.models_dir, f"lstm_fold{fold_idx}.pt")
+        model_path = os.path.join(models_dir, f"lstm_fold{fold_idx}.pt")
         torch.save(model.state_dict(), model_path)
         print(f"    Model saved: {model_path}")
 
         # Save fold metrics
         metrics_path = os.path.join(
-            args.metrics_dir, f"lstm_fold{fold_idx}_metrics.csv"
+            metrics_dir, f"lstm_fold{fold_idx}_metrics.csv"
         )
         save_metrics_csv(metrics, metrics_path)
         print(f"    Metrics saved: {metrics_path}")
@@ -323,7 +334,7 @@ def main():
         models_loaded = 0
 
         for fold_idx in fold_indices:
-            model_path = os.path.join(args.models_dir, f"lstm_fold{fold_idx}.pt")
+            model_path = os.path.join(models_dir, f"lstm_fold{fold_idx}.pt")
             if not os.path.exists(model_path):
                 print(f"    WARNING: Model '{model_path}' not found — skipping fold {fold_idx}")
                 continue
@@ -362,7 +373,7 @@ def main():
 
             # Save predictions
             predictions_path = os.path.join(
-                args.metrics_dir, "lstm_predictions.npz"
+                metrics_dir, "lstm_predictions.npz"
             )
             np.savez(
                 predictions_path,
@@ -377,7 +388,7 @@ def main():
 
             # Save ensemble metrics as CSV
             ensemble_metrics_path = os.path.join(
-                args.metrics_dir, "lstm_ensemble_metrics.csv"
+                metrics_dir, "lstm_ensemble_metrics.csv"
             )
             save_metrics_csv(ensemble_metrics, ensemble_metrics_path)
             print(f"    Ensemble metrics:  {ensemble_metrics_path}")
@@ -388,9 +399,9 @@ def main():
     print(f"\n{'=' * 60}")
     print("  LSTM TRAINING COMPLETE")
     print(f"{'=' * 60}")
-    print(f"  Models:      {args.models_dir}/lstm_fold{{fold}}.pt")
-    print(f"  Metrics:     {args.metrics_dir}/lstm_fold{{fold}}_metrics.csv")
-    print(f"  Predictions: {args.metrics_dir}/lstm_predictions.npz")
+    print(f"  Models:      {models_dir}/lstm_fold{{fold}}.pt")
+    print(f"  Metrics:     {metrics_dir}/lstm_fold{{fold}}_metrics.csv")
+    print(f"  Predictions: {metrics_dir}/lstm_predictions.npz")
     print()
 
 

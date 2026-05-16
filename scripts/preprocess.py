@@ -162,7 +162,7 @@ def main():
     print("\n" + "=" * 60)
     print("PREPROCESSING COMPLETE")
     print("=" * 60)
-    print(f"\nCache directory: results/cache/")
+    print("\nCache directory: results/cache/")
 
     # Check files
     expected_files = [f'fold_{i}_X.npy' for i in range(5)] + \
