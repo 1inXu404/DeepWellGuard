@@ -215,7 +215,7 @@ def main():
             sampler=sampler,
             drop_last=False,
             pin_memory=use_cuda,
-            num_workers=4 if use_cuda else 0,
+            num_workers=0,
         )
         val_loader = DataLoader(
             val_dataset,
@@ -223,7 +223,7 @@ def main():
             shuffle=False,
             drop_last=False,
             pin_memory=use_cuda,
-            num_workers=4 if use_cuda else 0,
+            num_workers=0,
         )
 
         # Instantiate model and trainer
@@ -313,7 +313,7 @@ def main():
             shuffle=False,
             drop_last=False,
             pin_memory=use_cuda,
-            num_workers=4 if use_cuda else 0,
+            num_workers=0,
         )
 
         # Ensemble: sum softmax probabilities from all fold models

@@ -47,8 +47,8 @@ class OilWellDataset(Dataset):
         if not labels_path.exists():
             raise FileNotFoundError(f"Labels file not found: {labels_path}")
 
-        self.features: np.ndarray = np.load(str(features_path))  # (N, 22, 120)
-        self.labels: np.ndarray = np.load(str(labels_path))  # (N,)
+        self.features: np.ndarray = np.load(str(features_path), mmap_mode='r')  # (N, 22, 120)
+        self.labels: np.ndarray = np.load(str(labels_path), mmap_mode='r')  # (N,)
 
         if len(self.features) != len(self.labels):
             raise ValueError(

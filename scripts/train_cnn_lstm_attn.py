@@ -110,11 +110,11 @@ def main() -> None:
         train_loader = DataLoader(
             train_ds, batch_size=args.batch_size,
             sampler=sampler,
-            pin_memory=use_cuda, num_workers=4 if use_cuda else 0,
+            pin_memory=use_cuda, num_workers=0,
         )
         val_loader = DataLoader(
             val_ds, batch_size=args.batch_size, shuffle=False,
-            pin_memory=use_cuda, num_workers=4 if use_cuda else 0,
+            pin_memory=use_cuda, num_workers=0,
         )
 
         print(f"  Train samples: {len(train_ds)}  |  Val samples: {len(val_ds)}")
@@ -167,7 +167,7 @@ def main() -> None:
     test_ds.labels = np.array([label_map[l] for l in test_ds.labels])
     test_loader = DataLoader(
         test_ds, batch_size=args.batch_size, shuffle=False,
-        pin_memory=use_cuda, num_workers=4 if use_cuda else 0,
+        pin_memory=use_cuda, num_workers=0,
     )
     print(f"  Test samples: {len(test_ds)}")
 

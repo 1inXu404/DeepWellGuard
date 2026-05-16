@@ -187,9 +187,8 @@ class Trainer:
         """
         patience = patience if patience is not None else self.patience
 
-        # Class weights from training set labels
-        class_weights = self._compute_class_weights(train_loader)
-        criterion = nn.CrossEntropyLoss(weight=class_weights.to(self.device))
+        # We are using WeightedRandomSampler, so no class weights in loss
+        criterion = nn.CrossEntropyLoss()
 
         optimizer = torch.optim.Adam(
             self.model.parameters(), lr=self.learning_rate
