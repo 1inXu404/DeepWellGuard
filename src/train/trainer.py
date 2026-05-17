@@ -193,9 +193,14 @@ class Trainer:
         optimizer = torch.optim.Adam(
             self.model.parameters(), lr=self.learning_rate
         )
-        scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
-            optimizer, T_max=epochs, eta_min=1e-5
-        )
+        
+        # Only apply CosineAnnealingLR to the improved model (CNNLSTMAttention)
+        is_attn_model = self.model.__class__.__name__ == "CNNLSTMAttention"
+        scheduler = None
+        if is_attn_model:
+            scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
+                optimizer, T_max=epochs, eta_min=1e-5
+            )
 
         history: Dict[str, list] = {
             "train_loss": [],
@@ -210,11 +215,12 @@ class Trainer:
             train_loss = self.train_epoch(train_loader, optimizer, criterion)
             val_loss, val_acc = self.validate(val_loader, criterion)
             
-            # Step the learning rate scheduler
-            scheduler.step()
-            
-            # Get current learning rate for logging (optional)
-            current_lr = scheduler.get_last_lr()[0]
+            # Step the learning rate scheduler if it exists
+            if scheduler is not None:
+                scheduler.step()
+                current_lr = scheduler.get_last_lr()[0]
+            else:
+                current_lr = self.learning_rate
 
             history["train_loss"].append(train_loss)
             history["val_loss"].append(val_loss)
