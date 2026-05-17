@@ -208,7 +208,7 @@ class Trainer:
             "val_acc": [],
         }
 
-        best_val_loss = float("inf")
+        best_val_acc = -1.0
         patience_counter = 0
 
         for epoch in range(1, epochs + 1):
@@ -227,16 +227,16 @@ class Trainer:
             history["val_acc"].append(val_acc)
             
             # Per-epoch progress
-            best_mark = ' *' if val_loss < best_val_loss else ''
+            best_mark = ' *' if val_acc > best_val_acc else ''
             print(f"  Epoch {epoch:3d}/{epochs} | "
                   f"LR={current_lr:.6f} | "
                   f"train_loss={train_loss:.4f} | "
                   f"val_loss={val_loss:.4f} | "
                   f"val_acc={val_acc:.4f}{best_mark}")
 
-            # Early-stopping logic
-            if val_loss < best_val_loss:
-                best_val_loss = val_loss
+            # Early-stopping logic based on Accuracy instead of Loss
+            if val_acc > best_val_acc:
+                best_val_acc = val_acc
                 self.best_model_state = copy.deepcopy(self.model.state_dict())
                 patience_counter = 0
             else:
