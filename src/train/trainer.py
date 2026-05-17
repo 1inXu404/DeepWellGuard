@@ -193,6 +193,9 @@ class Trainer:
         optimizer = torch.optim.Adam(
             self.model.parameters(), lr=self.learning_rate
         )
+        scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
+            optimizer, T_max=epochs, eta_min=1e-5
+        )
 
         history: Dict[str, list] = {
             "train_loss": [],
@@ -206,6 +209,12 @@ class Trainer:
         for epoch in range(1, epochs + 1):
             train_loss = self.train_epoch(train_loader, optimizer, criterion)
             val_loss, val_acc = self.validate(val_loader, criterion)
+            
+            # Step the learning rate scheduler
+            scheduler.step()
+            
+            # Get current learning rate for logging (optional)
+            current_lr = scheduler.get_last_lr()[0]
 
             history["train_loss"].append(train_loss)
             history["val_loss"].append(val_loss)
@@ -214,6 +223,7 @@ class Trainer:
             # Per-epoch progress
             best_mark = ' *' if val_loss < best_val_loss else ''
             print(f"  Epoch {epoch:3d}/{epochs} | "
+                  f"LR={current_lr:.6f} | "
                   f"train_loss={train_loss:.4f} | "
                   f"val_loss={val_loss:.4f} | "
                   f"val_acc={val_acc:.4f}{best_mark}")
