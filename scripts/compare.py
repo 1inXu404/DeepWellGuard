@@ -47,7 +47,7 @@ def main():
     # Map the model names to their expected prediction file paths
     # Handle the specific name mapping used in training scripts
     file_name_mapping = {
-        "LSTM": "lstm_predictions.npz",
+        "LSTM": "lstmmodel_predictions.npz",
         "CNN-LSTM-Attention": "cnnlstmattention_predictions.npz"
     }
 
