@@ -58,7 +58,7 @@ def main() -> None:
     train_labels = train_ds.labels
     class_counts = np.bincount(train_labels, minlength=7)
     class_counts = np.where(class_counts == 0, 1, class_counts)
-    sample_weights = 1.0 / class_counts[train_labels]
+    sample_weights = 1.0 / np.sqrt(class_counts[train_labels])
     num_train_samples = int(len(train_ds) * args.subset)
     sampler = WeightedRandomSampler(sample_weights, num_train_samples, replacement=True)
 

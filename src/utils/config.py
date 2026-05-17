@@ -7,7 +7,7 @@ import torch
 WINDOW_SIZE = 120  # 120 time steps
 OVERLAP = 0.5  # 50% overlap between windows
 STRIDE = 60  # Effective stride = int(WINDOW_SIZE * (1 - OVERLAP))
-DOWNSAMPLE_RATE = 5  # Downsample raw data by taking every 5th row
+DOWNSAMPLE_RATE = 2  # Downsample raw data by taking every 2nd row
 
 # Data info
 N_FEATURES = 22  # After removing UNUSED_TAGS from 27 sensors
@@ -18,7 +18,7 @@ HOLDOUT_RATIO = 0.2  # Per-class stratified holdout ratio
 
 # Training hyperparameters
 BATCH_SIZE = 32
-LEARNING_RATE = 0.001
+LEARNING_RATE = 0.0003
 MAX_EPOCHS = 100
 EARLY_STOPPING_PATIENCE = 15
 
