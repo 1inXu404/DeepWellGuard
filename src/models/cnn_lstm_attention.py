@@ -1,4 +1,4 @@
-"""MSCNN-SE model (Multi-Scale CNN + Squeeze-and-Excitation) for oil well event detection.
+"""CNN-LSTM-Attention hybrid model for oil well event detection.
 
 Input:  (batch, 22 sensors, 120 time steps)
 Output: (batch, 7) logits for 7 event classes.
@@ -7,10 +7,13 @@ Architecture:
 - 1st Derivative concatenation (captures sudden changes)
 - Multi-Scale CNN blocks (k=3, 7, 11) for different temporal scales
 - Squeeze-and-Excitation (SE) blocks for Channel/Sensor Attention
+- BiLSTM Temporal Encoder
+- Multi-Head Self-Attention (Temporal Attention)
 - Global Max Pooling to capture anomaly peaks
 - FC classifier
 
-Note: Kept the class name CNNLSTMAttention and filename for pipeline compatibility.
+This architecture strictly aligns with the "CNN-LSTM-Attention" thesis title,
+while incorporating cutting-edge Multi-Scale and Channel Attention enhancements.
 """
 
 import torch
@@ -65,11 +68,9 @@ class MultiScaleConv1d(nn.Module):
 
 class CNNLSTMAttention(nn.Module):
     """
-    Renamed internally to MSCNN-SE but kept the class name CNNLSTMAttention 
-    for compatibility with the training script.
-    
-    Parameter count is roughly ~170K, making it perfectly comparable 
-    to the pure CNN baseline (~162K).
+    Advanced CNN-LSTM-Attention Model.
+    Integrates Multi-Scale CNN and SE Channel Attention before feeding into
+    the BiLSTM and Multi-Head Temporal Attention layers.
     """
 
     def __init__(self):
@@ -78,13 +79,31 @@ class CNNLSTMAttention(nn.Module):
         # We concatenate original input (22) with its 1st derivative (22) -> 44 channels
         in_channels = 44
         
-        # Block 1
+        # CNN Part: Block 1
         self.ms_block1 = MultiScaleConv1d(in_channels, 96)
         self.se_block1 = SEBlock(96)
         
-        # Block 2
+        # CNN Part: Block 2
         self.ms_block2 = MultiScaleConv1d(96, 192)
         self.se_block2 = SEBlock(192)
+        
+        # LSTM Part: Temporal Encoder
+        self.lstm = nn.LSTM(
+            input_size=192,
+            hidden_size=96,
+            num_layers=1,
+            bidirectional=True,
+            batch_first=True,
+        )
+        
+        # Attention Part: Multi-head Temporal Attention
+        self.attention = nn.MultiheadAttention(
+            embed_dim=192,
+            num_heads=4,
+            dropout=0.3,
+            batch_first=True,
+        )
+        self.layer_norm = nn.LayerNorm(192)
         
         # Classifier head
         self.classifier = nn.Sequential(
@@ -107,22 +126,30 @@ class CNNLSTMAttention(nn.Module):
         # Step 0: Calculate 1st derivative (rate of change)
         diff = torch.zeros_like(x)
         diff[:, :, 1:] = x[:, :, 1:] - x[:, :, :-1]
-        
-        # Concatenate original features with derivative features
         x = torch.cat([x, diff], dim=1)  # (batch, 44, 120)
         
-        # Step 1: Multi-scale CNN + Channel/Sensor Attention (Block 1)
+        # Step 1: Multi-scale CNN + Channel/Sensor Attention
         x = self.ms_block1(x)  # (batch, 96, 60)
         x = self.se_block1(x)
-        
-        # Step 2: Multi-scale CNN + Channel/Sensor Attention (Block 2)
         x = self.ms_block2(x)  # (batch, 192, 30)
         x = self.se_block2(x)
         
-        # Step 3: Global Max Pooling (highly sensitive to sudden anomaly peaks)
-        pooled = x.max(dim=2)[0]  # (batch, 192)
+        # Step 2: LSTM Temporal Encoding
+        x = x.permute(0, 2, 1)  # (batch, 30, 192)
+        lstm_out, _ = self.lstm(x)  # (batch, 30, 192)
         
-        # Step 4: Classifier
+        # Step 3: Multi-Head Temporal Attention
+        attn_out, _ = self.attention(
+            lstm_out, lstm_out, lstm_out
+        )  # (batch, 30, 192)
+        
+        # Residual connection & LayerNorm
+        lstm_out = self.layer_norm(lstm_out + attn_out)
+        
+        # Step 4: Global Max Pooling
+        pooled = lstm_out.max(dim=1)[0]  # (batch, 192)
+        
+        # Step 5: Classifier
         logits = self.classifier(pooled)  # (batch, 7)
         return logits
 
