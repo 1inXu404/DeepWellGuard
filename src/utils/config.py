@@ -4,9 +4,10 @@ import numpy as np
 import torch
 
 # Data parameters
-WINDOW_SIZE = 120  # 120 seconds (120 time steps at 1Hz)
+WINDOW_SIZE = 120  # 120 time steps
 OVERLAP = 0.5  # 50% overlap between windows
 STRIDE = 60  # Effective stride = int(WINDOW_SIZE * (1 - OVERLAP))
+DOWNSAMPLE_RATE = 5  # Downsample raw data by taking every 5th row
 
 # Data info
 N_FEATURES = 22  # After removing UNUSED_TAGS from 27 sensors

@@ -20,7 +20,7 @@ from scipy.stats import mode as scipy_mode
 from ThreeWToolkit.preprocessing import Windowing, WindowingConfig
 from ThreeWToolkit.utils.data_utils import default_data_processing
 
-from src.utils.config import OVERLAP, WINDOW_SIZE
+from src.utils.config import OVERLAP, WINDOW_SIZE, DOWNSAMPLE_RATE
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -77,6 +77,9 @@ def preprocess_single_file(file_path: str) -> Tuple[np.ndarray, np.ndarray]:
     """
     # ── 1. Load ──────────────────────────────────────────────────────────
     raw = pd.read_parquet(file_path)
+
+    if DOWNSAMPLE_RATE > 1:
+        raw = raw.iloc[::DOWNSAMPLE_RATE].copy()
 
     # ── 2. Split signal / label ──────────────────────────────────────────
     signal_cols = [c for c in raw.columns if c not in ("class", "state")]
