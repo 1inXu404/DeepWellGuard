@@ -17,7 +17,8 @@ import pandas as pd
 from src.train.evaluate import (
     compute_metrics, 
     generate_confusion_matrix_counts,
-    generate_classification_report
+    generate_classification_report,
+    generate_roc_curve
 )
 
 def _resolve_key(data, *candidates):
@@ -41,10 +42,10 @@ def main():
     figures_root.mkdir(parents=True, exist_ok=True)
 
     models_to_evaluate = ["LSTM", "CNN-LSTM-Attention"]
-    # 3W class labels (after mapping) mapping back to original names (0=0, 1=1, 2=3, 3=4, 4=5, 5=6, 6=9)
-    class_names = ["Class 0", "Class 1", "Class 3", "Class 4", "Class 5", "Class 6", "Class 9"]
+    # We will use indices 0 to 6 for the labels as requested by the user.
+    class_names = [str(i) for i in range(7)]
 
-    print("Generating detailed metrics and count-based confusion matrices...\n")
+    print("Generating detailed metrics, count-based confusion matrices, and ROC curves...\n")
 
     for model_name in models_to_evaluate:
         target_filename = file_name_mapping[model_name]
@@ -65,6 +66,7 @@ def main():
         data = np.load(str(latest_file))
         y_true = _resolve_key(data, "labels", "y_true")
         y_pred = _resolve_key(data, "preds", "y_pred")
+        y_proba = _resolve_key(data, "probs", "y_proba")
 
         # 1. Generate text classification report
         report_str = generate_classification_report(y_true, y_pred)
@@ -100,6 +102,12 @@ def main():
         fig_name = figures_root / f"confusion_counts_{model_name.replace(' ', '_').replace('-', '_')}.png"
         generate_confusion_matrix_counts(y_true, y_pred, save_path=str(fig_name), class_names=class_names)
         print(f"[{model_name}] Saved count-based confusion matrix -> {fig_name}")
+        
+        # 4. Generate ROC-AUC curve
+        roc_name = figures_root / f"roc_curve_{model_name.replace(' ', '_').replace('-', '_')}.png"
+        generate_roc_curve(y_true, y_proba, save_path=str(roc_name), class_names=class_names)
+        print(f"[{model_name}] Saved ROC-AUC curves -> {roc_name}")
+        
         print("-" * 60)
 
     print("\nAll detailed metrics generated successfully!")
