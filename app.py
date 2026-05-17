@@ -24,6 +24,7 @@ from src.utils.config import (
     WINDOW_SIZE,
 )
 from src.models.cnn_lstm_attention import CNNLSTMAttention
+from src.models.lstm import LSTMModel
 from ThreeWToolkit.utils.data_utils import default_data_processing
 
 app = Flask(__name__)
@@ -47,14 +48,14 @@ def get_checkpoints():
     folder = Path(app.config['CHECKPOINT_FOLDER'])
     if not folder.exists():
         return json.dumps([])
-    
+
     files = []
     # 查找所有的 .pt 权重文件，包括子文件夹
     for pt_file in folder.rglob("*.pt"):
         # 存下相对路径，例如 "20260517_115543/cnnlstmattention.pt"
         rel_path = pt_file.relative_to(folder).as_posix()
         files.append(rel_path)
-        
+
     files.sort(reverse=True)
     return json.dumps(files)
 
@@ -70,7 +71,10 @@ def load_model(checkpoint_filename):
     # 因为 config 里没有 load_feature_columns，我们硬编码或者在此方法中返回 None 让后面处理
     # 实际上预处理会自动丢弃非信号列，所以不需要返回 feature_columns
     
-    model = CNNLSTMAttention().to(device)
+    if "lstmmodel" in checkpoint_filename.lower():
+        model = LSTMModel().to(device)
+    else:
+        model = CNNLSTMAttention().to(device)
 
     model.load_state_dict(torch.load(weight_path, map_location=device))
     model.eval()
