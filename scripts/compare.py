@@ -38,7 +38,7 @@ def main():
     parser.add_argument(
         "--models",
         nargs="+",
-        default=["CNN", "LSTM", "CNN-LSTM-Attention"],
+        default=["LSTM", "CNN-LSTM-Attention"],
         help="Names of models to compare. Prediction files must be in results/metrics/[name]_predictions.npz"
     )
     args = parser.parse_args()

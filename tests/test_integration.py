@@ -13,12 +13,12 @@ class TestTrainerIntegration:
 
     def test_fit_on_synthetic(self):
         """Trainer.fit on synthetic data reduces loss and produces history keys."""
-        from src.models.cnn import CNNModel
+        from src.models.lstm import LSTMModel
         from src.train.trainer import Trainer
         from src.utils.device import get_device
 
         device = get_device()
-        model = CNNModel().to(device)
+        model = LSTMModel().to(device)
 
         x = torch.randn(200, 22, 120)
         y = torch.randint(0, 7, (200,))
@@ -38,12 +38,12 @@ class TestTrainerIntegration:
 
     def test_early_stopping(self):
         """Early stopping triggers before max epochs with low patience."""
-        from src.models.cnn import CNNModel
+        from src.models.lstm import LSTMModel
         from src.train.trainer import Trainer
         from src.utils.device import get_device
 
         device = get_device()
-        model = CNNModel().to(device)
+        model = LSTMModel().to(device)
 
         # Use independent train/val sets so the model cannot memorise both.
         x_train = torch.randn(200, 22, 120)
@@ -66,12 +66,12 @@ class TestTrainerIntegration:
 
     def test_predict(self):
         """Trainer.predict returns correct shapes and valid class indices."""
-        from src.models.cnn import CNNModel
+        from src.models.lstm import LSTMModel
         from src.train.trainer import Trainer
         from src.utils.device import get_device
 
         device = get_device()
-        model = CNNModel().to(device)
+        model = LSTMModel().to(device)
 
         x = torch.randn(50, 22, 120)
         y = torch.randint(0, 7, (50,))

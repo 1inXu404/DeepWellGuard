@@ -1,9 +1,8 @@
-"""Pytest tests for all 3 models: CNN, LSTM, CNN-LSTM-Attention."""
+"""Pytest tests for all models: LSTM, CNN-LSTM-Attention."""
 
 import torch
 import torch.nn as nn
 
-from src.models.cnn import CNNModel
 from src.models.lstm import LSTMModel
 from src.models.cnn_lstm_attention import CNNLSTMAttention
 
@@ -62,29 +61,6 @@ def _save_load_test(model: nn.Module, path: str = "/tmp/_test_model.pt"):
     assert torch.allclose(expected, actual, atol=1e-6), (
         "Loaded model forward differs from original"
     )
-
-
-# ---------------------------------------------------------------------------
-# CNN
-# ---------------------------------------------------------------------------
-
-class TestCNN:
-    """Tests for CNNModel."""
-
-    def test_forward_shape(self):
-        _forward_shape_test(CNNModel())
-
-    def test_overfit(self):
-        losses = _overfit_single_batch(CNNModel())
-        assert losses[-1] < losses[0], (
-            f"Loss did not decrease: {losses[0]:.4f} -> {losses[-1]:.4f}"
-        )
-
-    def test_predict(self):
-        _predict_test(CNNModel())
-
-    def test_save_load(self):
-        _save_load_test(CNNModel())
 
 
 # ---------------------------------------------------------------------------
