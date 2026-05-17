@@ -235,7 +235,8 @@ def predict_stream():
                             "probs": prob_val
                         }
                         yield json.dumps(chunk) + "\n"
-                        time.sleep(0.02)
+                        # 增加休眠时间（由 0.02 秒改为 0.1 秒），让前端流式动画显示得更平稳从容
+                        time.sleep(0.1)
 
             abnormal_preds = [p for p in states if p != 0]
             if abnormal_preds:
