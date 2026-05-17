@@ -81,9 +81,10 @@ class TestTrainerIntegration:
         trainer = Trainer(model, device)
         trainer.fit(loader, loader, epochs=1, patience=3)
 
-        preds, probs = trainer.predict(loader)
+        preds, probs, y_true = trainer.predict(loader)
         assert preds.shape == (50,), f"Expected (50,), got {preds.shape}"
         assert probs.shape == (50, 7), f"Expected (50, 7), got {probs.shape}"
+        assert y_true.shape == (50,), f"Expected (50,), got {y_true.shape}"
         assert all(0 <= p < 7 for p in preds), "Predictions out of range"
         # Probabilities should sum to 1 per sample
         np.testing.assert_allclose(probs.sum(axis=1), 1.0, atol=1e-5)

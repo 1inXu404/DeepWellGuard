@@ -149,7 +149,7 @@ def main() -> None:
         fold_models.append(model)
 
         # Validation accuracy
-        val_preds, _ = trainer.predict(val_loader)
+        val_preds, _, _ = trainer.predict(val_loader)
         val_acc = float((val_preds == val_ds.labels).mean())
         fold_accs.append(val_acc)
         print(f"  Fold {fold} val accuracy: {val_acc:.4f}")
@@ -187,10 +187,13 @@ def main() -> None:
     print(f"  Test samples: {len(test_ds)}")
 
     all_probs: list[np.ndarray] = []
+    test_labels = None
     for model in fold_models:
         trainer = Trainer(model, device)
-        _, probs = trainer.predict(test_loader)
+        _, probs, y_true = trainer.predict(test_loader)
         all_probs.append(probs)
+        if test_labels is None:
+            test_labels = y_true
 
     # Ensemble: average softmax probabilities across fold models
     avg_probs = np.mean(all_probs, axis=0)  # (N, n_classes)
@@ -202,7 +205,7 @@ def main() -> None:
         os.path.join(metrics_dir, "cnn_lstm_attn_predictions.npz"),
         preds=test_preds,
         probs=avg_probs,
-        labels=test_ds.labels,
+        labels=test_labels,
     )
     print("  Predictions saved → results/metrics/cnn_lstm_attn_predictions.npz")
 

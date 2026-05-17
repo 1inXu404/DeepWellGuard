@@ -202,12 +202,8 @@ def main() -> None:
 
         fold_models.append(model)
 
-        # Validation accuracy (labels already remapped in OilWellDataset)
-        val_preds, _ = trainer.predict(val_loader)
-        # Retrieve remapped labels via the Subset's indices
-        val_labels = np.array(
-            [val_ds.dataset.labels[i] for i in val_ds.indices]
-        )
+        # Validation accuracy
+        val_preds, _, val_labels = trainer.predict(val_loader)
         val_acc = float((val_preds == val_labels).mean())
         fold_accs.append(val_acc)
         print(f"  Fold {fold} val accuracy: {val_acc:.4f}")
@@ -243,19 +239,17 @@ def main() -> None:
     print(f"  Test samples: {len(test_ds)}")
 
     all_probs: list[np.ndarray] = []
+    test_labels = None
     for model in fold_models:
         trainer = Trainer(model, device)
-        _, probs = trainer.predict(test_loader)
+        _, probs, y_true = trainer.predict(test_loader)
         all_probs.append(probs)
+        if test_labels is None:
+            test_labels = y_true
 
     # Ensemble: average softmax probabilities across fold models
     avg_probs = np.mean(all_probs, axis=0)  # (N, n_classes)
     test_preds = np.argmax(avg_probs, axis=1)  # (N,)
-
-    # Collect ground-truth labels from the test Subset (already remapped)
-    test_labels = np.array(
-        [test_ds.dataset.labels[i] for i in test_ds.indices]
-    )
 
     # Save predictions
     

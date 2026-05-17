@@ -253,7 +253,7 @@ def main():
         elapsed = time.time() - t0
 
         # Evaluate on validation set
-        val_preds, val_probs = trainer.predict(val_loader)
+        val_preds, val_probs, _ = trainer.predict(val_loader)
         metrics = compute_metrics(y_val, val_preds, val_probs)
         metrics["train_time_sec"] = round(elapsed, 2)
         fold_metrics[fold_idx] = metrics
@@ -344,7 +344,7 @@ def main():
             model.load_state_dict(state)
             trainer = Trainer(model, device)
 
-            _, probs = trainer.predict(test_loader)
+            _, probs, _ = trainer.predict(test_loader)
             if ensemble_probs is None:
                 ensemble_probs = probs
             else:

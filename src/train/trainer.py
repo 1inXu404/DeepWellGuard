@@ -242,22 +242,23 @@ class Trainer:
     def predict(
         self,
         dataloader,
-    ) -> Tuple[np.ndarray, np.ndarray]:
+    ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
         """Run inference on a dataloader.
 
         Returns:
-            Tuple of ``(preds, probs)``.
+            Tuple of ``(preds, probs, y_true)``.
             ``preds`` — ``(N,)`` int array of predicted class indices.
-            ``probs`` — ``(N, num_classes)`` float array of softmax
-            probabilities.
+            ``probs`` — ``(N, num_classes)`` float array of softmax probabilities.
+            ``y_true`` — ``(N,)`` int array of true labels.
         """
         self.model.eval()
         all_preds: list = []
         all_probs: list = []
+        all_labels: list = []
 
         ctx = _get_autocast() if self.use_amp else nullcontext()
         with torch.no_grad():
-            for x, _ in dataloader:
+            for x, y in dataloader:
                 x = x.to(self.device, non_blocking=True)
                 with ctx:
                     logits = self.model(x)
@@ -265,8 +266,9 @@ class Trainer:
                 preds = logits.argmax(dim=1)
                 all_preds.append(preds.cpu().numpy())
                 all_probs.append(probs.cpu().numpy())
+                all_labels.append(y.numpy())
 
-        return np.concatenate(all_preds), np.concatenate(all_probs)
+        return np.concatenate(all_preds), np.concatenate(all_probs), np.concatenate(all_labels)
 
     # ------------------------------------------------------------------
     # Helpers
