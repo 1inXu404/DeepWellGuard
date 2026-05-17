@@ -11,12 +11,13 @@ from torch.utils.data import DataLoader, Subset, WeightedRandomSampler
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from src.data.dataset import OilWellDataset
-from src.models.cnn_lstm_attention import CNNLSTMAttention
-from src.train.evaluate import compute_metrics
-from src.train.trainer import Trainer
-from src.utils.config import BATCH_SIZE, EARLY_STOPPING_PATIENCE, MAX_EPOCHS, RETAINED_CLASSES, SEED
-from src.utils.device import get_device
+from src.data.dataset import OilWellDataset  # noqa: E402
+from src.models.cnn_lstm_attention import CNNLSTMAttention  # noqa: E402
+from src.train.evaluate import compute_metrics  # noqa: E402
+from src.train.trainer import Trainer  # noqa: E402
+from src.utils.config import BATCH_SIZE, EARLY_STOPPING_PATIENCE, MAX_EPOCHS, RETAINED_CLASSES, SEED  # noqa: E402
+from src.utils.device import get_device  # noqa: E402
+
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Train CNNLSTMAttention on 3W oil well data.")
@@ -123,6 +124,7 @@ def main() -> None:
     print(f"  Macro F1:         {metrics['macro_f1']:.4f}")
     print(f"  Per-class F1:     {[round(f, 4) for f in metrics['per_class_f1']]}")
     print(f"{'=' * 50}")
+
 
 if __name__ == '__main__':
     main()

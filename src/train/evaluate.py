@@ -145,6 +145,7 @@ def generate_confusion_matrix_counts(y_true, y_pred, save_path=None, class_names
 
     return cm
 
+
 def generate_classification_report(y_true, y_pred):
     """Return sklearn's classification report as a string.
 
@@ -183,11 +184,11 @@ def generate_roc_curve(y_true, y_proba, save_path=None, class_names=None):
     from itertools import cycle
 
     n_classes = y_proba.shape[1]
-    
+
     # Binarize the output
     classes = list(range(n_classes))
     y_true_bin = label_binarize(y_true, classes=classes)
-    
+
     if n_classes == 2:
         y_true_bin = y_true_bin.reshape(-1, 1)
 

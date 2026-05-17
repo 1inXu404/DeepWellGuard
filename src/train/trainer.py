@@ -17,10 +17,12 @@ import torch.nn.functional as F
 # PyTorch 2.4+ uses torch.amp; older uses torch.cuda.amp
 try:
     from torch.amp import GradScaler, autocast
+
     def _get_autocast():
         return autocast('cuda')
 except ImportError:
     from torch.cuda.amp import GradScaler, autocast
+
     def _get_autocast():
         return autocast()
 
@@ -193,7 +195,7 @@ class Trainer:
         optimizer = torch.optim.Adam(
             self.model.parameters(), lr=self.learning_rate
         )
-        
+
         # Only apply CosineAnnealingLR to the improved model (CNNLSTMAttention)
         is_attn_model = self.model.__class__.__name__ == "CNNLSTMAttention"
         scheduler = None
@@ -214,7 +216,7 @@ class Trainer:
         for epoch in range(1, epochs + 1):
             train_loss = self.train_epoch(train_loader, optimizer, criterion)
             val_loss, val_acc = self.validate(val_loader, criterion)
-            
+
             # Step the learning rate scheduler if it exists
             if scheduler is not None:
                 scheduler.step()
@@ -225,7 +227,7 @@ class Trainer:
             history["train_loss"].append(train_loss)
             history["val_loss"].append(val_loss)
             history["val_acc"].append(val_acc)
-            
+
             # Per-epoch progress
             best_mark = ' *' if val_acc > best_val_acc else ''
             print(f"  Epoch {epoch:3d}/{epochs} | "

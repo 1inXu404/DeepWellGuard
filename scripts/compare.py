@@ -14,11 +14,11 @@ from pathlib import Path
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-import numpy as np
-import pandas as pd
+import numpy as np  # noqa: E402
+import pandas as pd  # noqa: E402
 
-from src.train.evaluate import compute_metrics, generate_confusion_matrix
-from src.visualize.plots import plot_comparison_bar
+from src.train.evaluate import compute_metrics, generate_confusion_matrix  # noqa: E402
+from src.visualize.plots import plot_comparison_bar  # noqa: E402
 
 
 def _resolve_key(data, *candidates):
@@ -32,7 +32,8 @@ def _resolve_key(data, *candidates):
     )
 
 
-import argparse
+import argparse  # noqa: E402
+
 
 def main():
     parser = argparse.ArgumentParser(description="Compare model predictions.")
@@ -55,16 +56,16 @@ def main():
     metrics_root = Path("results/metrics")
     for m in args.models:
         target_filename = file_name_mapping.get(m, f"{m.lower().replace(' ', '_').replace('-', '_')}_predictions.npz")
-        
+
         # Find all matching prediction files in timestamp subdirectories
         found_files = list(metrics_root.rglob(target_filename))
-        
+
         if not found_files:
             # Also check the root metrics folder just in case
             root_file = metrics_root / target_filename
             if root_file.exists():
                 found_files = [root_file]
-                
+
         if found_files:
             # Sort by path which will sort by timestamp folder names chronologically
             # and pick the last one (latest)

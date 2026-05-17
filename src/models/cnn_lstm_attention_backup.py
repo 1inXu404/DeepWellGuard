@@ -108,7 +108,7 @@ class CNNLSTMAttention(nn.Module):
         attn_out, _ = self.attention(
             lstm_out, lstm_out, lstm_out
         )  # (batch, 30, 256)
-        
+
         # Add residual connection & LayerNorm (crucial for stabilization)
         lstm_out = self.layer_norm(lstm_out + attn_out)
 

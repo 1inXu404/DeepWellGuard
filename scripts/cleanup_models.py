@@ -10,6 +10,7 @@ import shutil
 import sys
 from pathlib import Path
 
+
 def main():
     models_dir = Path("results/models")
     if not models_dir.exists():
@@ -19,11 +20,11 @@ def main():
     # Dictionary to keep track of the latest directory for each model file type
     # e.g., 'lstmmodel.pt' -> Path('results/models/20260517_153236')
     latest_models = {}
-    
+
     # List all subdirectories (which are timestamp folders)
     # Sort them alphabetically (which means chronological order for YYYYMMDD_HHMMSS)
     subdirs = sorted([d for d in models_dir.iterdir() if d.is_dir()])
-    
+
     print(f"Found {len(subdirs)} timestamp directories in {models_dir}.")
 
     # Identify the latest directory for each model file
@@ -47,13 +48,14 @@ def main():
 
     # Delete all other directories
     directories_to_delete = [d for d in subdirs if d not in directories_to_keep]
-    
+
     print(f"\n--- Deleting {len(directories_to_delete)} old directories ---")
     for d in directories_to_delete:
         print(f"Deleting: {d}")
         shutil.rmtree(d)
-        
+
     print("\nCleanup complete.")
+
 
 if __name__ == "__main__":
     main()

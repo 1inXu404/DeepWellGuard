@@ -16,9 +16,10 @@ from sklearn.model_selection import train_test_split
 # Add project root to path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from src.data.loader import list_files_by_class, stratified_holdout_split, separate_holdout_files
-from src.data.preprocessor import preprocess_single_file, save_preprocessed
-from src.utils.config import SEED, HOLDOUT_RATIO
+from src.data.loader import list_files_by_class, stratified_holdout_split, separate_holdout_files  # noqa: E402
+from src.data.preprocessor import preprocess_single_file, save_preprocessed  # noqa: E402
+from src.utils.config import SEED, HOLDOUT_RATIO  # noqa: E402
+
 
 def main():
     print("=" * 60)
@@ -72,17 +73,17 @@ def main():
             except Exception as e:
                 print(f"    WARN: Skipping {os.path.basename(path)}: {e}")
                 skipped += 1
-        
+
         if X_list:
             X_out = np.concatenate(X_list, axis=0)
             y_out = np.concatenate(y_list, axis=0)
         else:
             X_out, y_out = np.empty((0, 22, 120)), np.empty((0,))
-            
+
         return X_out, y_out, skipped
 
     print("\n[4/4] Processing files and caching...")
-    
+
     # Process train
     X_train, y_train, skipped_train = process_paths(train_paths, "  Train")
     save_preprocessed('train', X_train, y_train)
@@ -109,10 +110,11 @@ def main():
     print("PREPROCESSING COMPLETE")
     print("=" * 60)
     print("\nCache directory: results/cache/")
-    
+
     print(f"Train class distribution: {dict(train_classes)}")
     print(f"Val class distribution: {dict(val_classes)}")
     print(f"Test class distribution: {dict(test_classes)}")
+
 
 if __name__ == '__main__':
     main()

@@ -3,7 +3,7 @@
 Input:  (batch, 22 sensors, 120 time steps)
 Output: (batch, 7) logits for 7 event classes.
 
-Architecture: 
+Architecture:
 - 1st Derivative concatenation (captures sudden changes)
 - Multi-Scale CNN blocks (k=3, 7, 11) for different temporal scales
 - Squeeze-and-Excitation (SE) blocks for Channel/Sensor Attention
@@ -23,6 +23,7 @@ import torch.nn.functional as F
 
 class SEBlock(nn.Module):
     """Squeeze-and-Excitation block for Channel/Sensor Attention."""
+
     def __init__(self, channel, reduction=4):
         super(SEBlock, self).__init__()
         self.avg_pool = nn.AdaptiveAvgPool1d(1)
@@ -42,19 +43,20 @@ class SEBlock(nn.Module):
 
 class MultiScaleConv1d(nn.Module):
     """Multi-Scale Convolution block to capture both sudden and slow events."""
+
     def __init__(self, in_channels, out_channels):
         super(MultiScaleConv1d, self).__init__()
         assert out_channels % 3 == 0, "out_channels should be divisible by 3"
         branch_out = out_channels // 3
-        
+
         self.branch1 = nn.Conv1d(in_channels, branch_out, kernel_size=3, padding=1)
         self.branch2 = nn.Conv1d(in_channels, branch_out, kernel_size=7, padding=3)
         self.branch3 = nn.Conv1d(in_channels, branch_out, kernel_size=11, padding=5)
-        
+
         self.bn = nn.BatchNorm1d(out_channels)
         self.relu = nn.ReLU()
         self.pool = nn.MaxPool1d(2)
-        
+
     def forward(self, x):
         x1 = self.branch1(x)
         x2 = self.branch2(x)
@@ -75,18 +77,18 @@ class CNNLSTMAttention(nn.Module):
 
     def __init__(self):
         super().__init__()
-        
+
         # We concatenate original input (22) with its 1st derivative (22) -> 44 channels
         in_channels = 44
-        
+
         # CNN Part: Block 1
         self.ms_block1 = MultiScaleConv1d(in_channels, 96)
         self.se_block1 = SEBlock(96)
-        
+
         # CNN Part: Block 2
         self.ms_block2 = MultiScaleConv1d(96, 192)
         self.se_block2 = SEBlock(192)
-        
+
         # LSTM Part: Temporal Encoder
         self.lstm = nn.LSTM(
             input_size=192,
@@ -95,7 +97,7 @@ class CNNLSTMAttention(nn.Module):
             bidirectional=True,
             batch_first=True,
         )
-        
+
         # Attention Part: Multi-head Temporal Attention
         self.attention = nn.MultiheadAttention(
             embed_dim=192,
@@ -104,7 +106,7 @@ class CNNLSTMAttention(nn.Module):
             batch_first=True,
         )
         self.layer_norm = nn.LayerNorm(192)
-        
+
         # Classifier head
         self.classifier = nn.Sequential(
             nn.Linear(192, 64),
@@ -127,28 +129,28 @@ class CNNLSTMAttention(nn.Module):
         diff = torch.zeros_like(x)
         diff[:, :, 1:] = x[:, :, 1:] - x[:, :, :-1]
         x = torch.cat([x, diff], dim=1)  # (batch, 44, 120)
-        
+
         # Step 1: Multi-scale CNN + Channel/Sensor Attention
         x = self.ms_block1(x)  # (batch, 96, 60)
         x = self.se_block1(x)
         x = self.ms_block2(x)  # (batch, 192, 30)
         x = self.se_block2(x)
-        
+
         # Step 2: LSTM Temporal Encoding
         x = x.permute(0, 2, 1)  # (batch, 30, 192)
         lstm_out, _ = self.lstm(x)  # (batch, 30, 192)
-        
+
         # Step 3: Multi-Head Temporal Attention
         attn_out, _ = self.attention(
             lstm_out, lstm_out, lstm_out
         )  # (batch, 30, 192)
-        
+
         # Residual connection & LayerNorm
         lstm_out = self.layer_norm(lstm_out + attn_out)
-        
+
         # Step 4: Global Max Pooling
         pooled = lstm_out.max(dim=1)[0]  # (batch, 192)
-        
+
         # Step 5: Classifier
         logits = self.classifier(pooled)  # (batch, 7)
         return logits
