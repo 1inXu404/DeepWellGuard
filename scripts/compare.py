@@ -10,6 +10,7 @@ models, computes classification metrics via src.train.evaluate, and produces:
 
 import os
 import sys
+from pathlib import Path
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -46,17 +47,31 @@ def main():
     # Map the model names to their expected prediction file paths
     # Handle the specific name mapping used in training scripts
     file_name_mapping = {
-        "CNN": "cnn",
-        "LSTM": "lstm",
-        "CNN-LSTM-Attention": "cnn_lstm_attn"
+        "LSTM": "lstm_predictions.npz",
+        "CNN-LSTM-Attention": "cnnlstmattention_predictions.npz"
     }
 
     models = []
+    metrics_root = Path("results/metrics")
     for m in args.models:
-        # Resolve the actual filename base
-        base_name = file_name_mapping.get(m, m.lower().replace(" ", "_").replace("-", "_"))
-        path = f"results/metrics/{base_name}_predictions.npz"
-        models.append((m, path))
+        target_filename = file_name_mapping.get(m, f"{m.lower().replace(' ', '_').replace('-', '_')}_predictions.npz")
+        
+        # Find all matching prediction files in timestamp subdirectories
+        found_files = list(metrics_root.rglob(target_filename))
+        
+        if not found_files:
+            # Also check the root metrics folder just in case
+            root_file = metrics_root / target_filename
+            if root_file.exists():
+                found_files = [root_file]
+                
+        if found_files:
+            # Sort by path which will sort by timestamp folder names chronologically
+            # and pick the last one (latest)
+            latest_file = sorted(found_files)[-1]
+            models.append((m, str(latest_file)))
+        else:
+            print(f"WARN: Could not find prediction file for {m} (looked for {target_filename})")
 
     os.makedirs("results/metrics", exist_ok=True)
     os.makedirs("results/figures", exist_ok=True)
