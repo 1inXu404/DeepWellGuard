@@ -99,6 +99,49 @@ def generate_confusion_matrix(y_true, y_pred, save_path=None, class_names=None):
     return cm
 
 
+def generate_confusion_matrix_counts(y_true, y_pred, save_path=None, class_names=None):
+    """Generate a confusion matrix heatmap with absolute counts (not normalized).
+
+    Args:
+        y_true: Ground-truth labels, array-like of shape (n_samples,).
+        y_pred: Predicted labels, array-like of shape (n_samples,).
+        save_path: If provided, saves the figure as a PNG to this path.
+        class_names: List of class name strings for axis labels.
+                     Defaults to [0, 1, ..., n_classes-1].
+
+    Returns:
+        numpy.ndarray: The confusion matrix (counts).
+    """
+    import matplotlib.pyplot as plt
+    import seaborn as sns
+
+    cm = confusion_matrix(y_true, y_pred)
+
+    n_classes = cm.shape[0]
+    if class_names is None:
+        class_names = [str(i) for i in range(n_classes)]
+
+    plt.figure(figsize=(8, 6))
+    sns.heatmap(
+        cm,
+        annot=True,
+        fmt="d",  # Display integer format
+        cmap="Blues",
+        xticklabels=class_names,
+        yticklabels=class_names,
+    )
+    plt.xlabel("Predicted")
+    plt.ylabel("True")
+    plt.title("Confusion Matrix (Counts)")
+
+    if save_path:
+        plt.savefig(save_path, dpi=150, bbox_inches="tight")
+        plt.close()
+    else:
+        plt.show()
+
+    return cm
+
 def generate_classification_report(y_true, y_pred):
     """Return sklearn's classification report as a string.
 
