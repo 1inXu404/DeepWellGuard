@@ -1,0 +1,334 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>3W 油井异常检测系统</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/css/materialize.min.css">
+    <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+
+<div class="container" style="width: 90%; max-width: 1400px;">
+    <h3 class="center-align" style="color: #3f51b5; font-weight: bold; margin-bottom: 40px; margin-top: 40px;">
+        <i class="material-icons medium" style="vertical-align: middle;">build</i>
+        油井异常状态智能检测
+    </h3>
+
+    <div class="row">
+        <div class="col s12 m3">
+            <div class="card-panel white">
+                <span class="card-title" style="font-size: 1.2rem; font-weight: bold;">分析配置</span>
+                <form id="upload-form">
+                    <div class="flex-row">
+                        <div class="input-field flex-grow">
+                            <select id="checkpoint_file" name="checkpoint_file">
+                                <option value="" disabled selected>正在扫描 checkpoints...</option>
+                            </select>
+                            <label>加载模型权重</label>
+                        </div>
+                        <a href="#!" id="refresh-btn" class="btn-floating btn-small waves-effect waves-light white tooltipped" data-position="top" data-tooltip="刷新权重文件" style="margin-left: 15px; box-shadow: none;">
+                            <i class="material-icons indigo-text">refresh</i>
+                        </a>
+                    </div>
+                    <div class="file-field input-field" style="margin-top: 30px;">
+                        <div class="btn indigo">
+                            <span>选择数据文件</span>
+                            <input type="file" id="file" name="file" accept=".parquet">
+                        </div>
+                        <div class="file-path-wrapper">
+                            <input class="file-path validate" type="text" placeholder="上传 .parquet 验证集">
+                        </div>
+                    </div>
+                    <div class="center-align" style="margin-top: 40px;">
+                        <button class="btn-large waves-effect waves-light indigo" type="submit" id="predict-btn" style="width: 100%; border-radius: 20px;">
+                            开始实时推理
+                            <i class="material-icons right">timeline</i>
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <div class="col s12 m9">
+            <div class="card-panel white">
+                <div id="real-time-status" class="status-box center-align">
+                    <h5 id="current-state-name" style="margin: 0; font-weight: bold; letter-spacing: 2px;">等待数据加载</h5>
+                    <div id="current-timestep" style="margin-top: 8px; opacity: 0.9; font-size: 1rem;">当前处理进度: -</div>
+                </div>
+
+                <div id="overall-status" class="status-box center-align">
+                    <h5 id="overall-state-name" style="margin: 0; font-weight: bold; letter-spacing: 2px;">全局总览: -</h5>
+                </div>
+
+                <div class="result-flex-container">
+                    <div class="chart-wrapper">
+                        <div id="chart-container"></div>
+                    </div>
+
+                    <div id="prob-panel">
+                        <span style="font-size: 1.1rem; font-weight: bold; color: #333; display: block; margin-bottom: 15px;">
+                            <i class="material-icons" style="vertical-align: bottom; font-size: 1.2rem;">bar_chart</i> 实时置信度
+                        </span>
+                        <div id="prob-bars-container"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/js/materialize.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/echarts/dist/echarts.min.js"></script>
+<script>
+    const chartDom = document.getElementById('chart-container');
+    const myChart = echarts.init(chartDom);
+
+    let sensorCols = [];
+    let classNames = [];
+    let seriesData = {};
+    let currentDataIndex = 0;
+    let totalWindows = 0;
+    let pendingUpdate = false;
+
+    async function loadCheckpoints(isRefresh = false) {
+        const selectEl = document.getElementById('checkpoint_file');
+        if (isRefresh) {
+            selectEl.innerHTML = '<option value="" disabled selected>正在刷新...</option>';
+            M.FormSelect.init(selectEl);
+        }
+        try {
+            const response = await fetch('/get_checkpoints');
+            const files = await response.json();
+            selectEl.innerHTML = '';
+            if (files.length === 0) {
+                const opt = document.createElement('option');
+                opt.value = ""; opt.textContent = "未找到权重文件";
+                opt.disabled = true; opt.selected = true; selectEl.appendChild(opt);
+            } else {
+                files.forEach((file, index) => {
+                    const opt = document.createElement('option');
+                    opt.value = file; opt.textContent = file;
+                    if(index === 0) opt.selected = true; selectEl.appendChild(opt);
+                });
+            }
+            M.FormSelect.init(selectEl);
+            if (isRefresh) M.toast({html: '权重列表已刷新', classes: 'green rounded'});
+        } catch (error) {
+            selectEl.innerHTML = '<option value="" disabled selected>加载失败</option>';
+            M.FormSelect.init(selectEl);
+        }
+    }
+
+    document.addEventListener('DOMContentLoaded', async function() {
+        M.FormSelect.init(document.querySelectorAll('select'));
+        M.Tooltip.init(document.querySelectorAll('.tooltipped'));
+        await loadCheckpoints();
+    });
+
+    document.getElementById('refresh-btn').addEventListener('click', async (e) => {
+        e.preventDefault();
+        const icon = e.currentTarget.querySelector('i');
+        icon.style.transform = 'rotate(360deg)';
+        setTimeout(() => { icon.style.transform = 'none'; }, 500);
+        await loadCheckpoints(true);
+    });
+
+    document.getElementById('upload-form').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const fileInput = document.getElementById('file');
+        const selectEl = document.getElementById('checkpoint_file');
+
+        if (!selectEl.value) return M.toast({html: '请选择模型权重', classes: 'red rounded'});
+        if (fileInput.files.length === 0) return M.toast({html: '请选择数据文件', classes: 'red rounded'});
+
+        document.getElementById('prob-panel').style.display = 'none';
+        document.getElementById('real-time-status').style.backgroundColor = '#9e9e9e';
+        document.getElementById('current-state-name').innerText = '正在连接推理引擎...';
+        document.getElementById('current-timestep').innerText = '当前处理进度: -';
+        document.getElementById('overall-status').style.backgroundColor = '#9e9e9e';
+        document.getElementById('overall-state-name').innerText = '全局总览: 正在推理...';
+        document.getElementById('predict-btn').disabled = true;
+        myChart.clear();
+
+        const formData = new FormData(e.target);
+
+        try {
+            const response = await fetch('/predict_stream', { method: 'POST', body: formData });
+            const reader = response.body.getReader();
+            const decoder = new TextDecoder('utf-8');
+            let buffer = '';
+
+            while (true) {
+                const { done, value } = await reader.read();
+                if (done) break;
+
+                buffer += decoder.decode(value, { stream: true });
+                let lines = buffer.split('\n');
+                buffer = lines.pop();
+
+                for (let line of lines) {
+                    if (!line.trim()) continue;
+                    try {
+                        const data = JSON.parse(line);
+                        handleStreamData(data);
+                    } catch(err) {
+                        console.error("JSON 解析错误", err);
+                    }
+                }
+            }
+        } catch (error) {
+            M.toast({html: '网络发生异常或连接中断', classes: 'red rounded'});
+            document.getElementById('predict-btn').disabled = false;
+        }
+    });
+
+    function handleStreamData(data) {
+        if (data.type === 'message') {
+            document.getElementById('current-state-name').innerText = data.content;
+        }
+        else if (data.type === 'error') {
+            M.toast({html: `错误: ${data.content}`, classes: 'red rounded', displayLength: 4000});
+            document.getElementById('real-time-status').style.backgroundColor = '#f44336';
+            document.getElementById('current-state-name').innerText = '推理失败';
+            document.getElementById('overall-status').style.backgroundColor = '#f44336';
+            document.getElementById('overall-state-name').innerText = '全局总览: ' + data.content;
+            document.getElementById('predict-btn').disabled = false;
+        }
+        else if (data.type === 'init') {
+            document.getElementById('prob-panel').style.display = 'block';
+
+            totalWindows = data.total_windows;
+            classNames = data.class_names;
+            sensorCols = data.sensor_cols;
+
+            currentDataIndex = 0;
+            seriesData = {};
+            sensorCols.forEach(col => { seriesData[col] = []; });
+
+            const probContainer = document.getElementById('prob-bars-container');
+            probContainer.innerHTML = '';
+            classNames.forEach((name, idx) => {
+                const barColor = idx === 0 ? '#4caf50' : '#f44336';
+                probContainer.innerHTML += `
+                    <div class="prob-row">
+                        <div class="prob-label">
+                            <span class="prob-label-text" title="${name}">${name}</span>
+                            <span id="prob-val-${idx}">0.0%</span>
+                        </div>
+                        <div class="prob-bar-bg">
+                            <div id="prob-bar-${idx}" class="prob-bar-fill" style="background-color: ${barColor};"></div>
+                        </div>
+                    </div>
+                `;
+            });
+
+            myChart.setOption({
+                animation: false,
+                tooltip: {
+                    trigger: 'axis',
+                    formatter: function (params) {
+                        let tooltipHtml = `时间步: ${params[0].data[0]}<br/>`;
+                        let stateVal = params[0].data[2];
+                        let stateName = classNames[stateVal] || '未知';
+                        let stateColor = stateVal === 0 ? "#4caf50" : "#f44336";
+                        tooltipHtml += `诊断状态: <b style="color:${stateColor}">${stateName}</b><br/><hr style="margin: 5px 0; border: 0.5px solid #ccc;"/>`;
+                        params.forEach(p => {
+                            let val = p.data[1];
+                            let displayVal = Math.abs(val) > 10000 ? val.toExponential(2) : val.toFixed(2);
+                            tooltipHtml += `${p.marker} ${p.seriesName}: <b>${displayVal}</b><br/>`;
+                        });
+                        return tooltipHtml;
+                    }
+                },
+                legend: { data: sensorCols, type: 'scroll', top: 0 },
+                grid: { left: '3%', right: '4%', bottom: '5%', top: '15%', containLabel: true },
+                xAxis: { type: 'value', name: 'Time Steps', min: 0, max: data.total_points - 1 },
+                yAxis: { type: 'value', name: 'Sensor Values', scale: true },
+                visualMap: { show: false, dimension: 2, pieces: [{ value: 0, color: '#4caf50' }, { min: 1, color: '#f44336' }] },
+                series: sensorCols.map(col => ({ name: col, type: 'line', showSymbol: false, data: [], lineStyle: { width: 2 } }))
+            }, true);
+            myChart.resize();
+        }
+        else if (data.type === 'data') {
+            const numNewPoints = data.new_values[sensorCols[0]].length;
+            for(let i = 0; i < numNewPoints; i++) {
+                let timeIdx = currentDataIndex++;
+                sensorCols.forEach(col => {
+                    let val = data.new_values[col][i];
+                    seriesData[col].push([timeIdx, val, data.state_idx]);
+                });
+            }
+
+            if (data.state > 0) {
+                let startIdx = data.start_idx;
+                let endIdx = data.end_idx;
+                for (let j = startIdx; j < endIdx; j++) {
+                    if (j < currentDataIndex) {
+                        sensorCols.forEach(col => {
+                            seriesData[col][j][2] = Math.max(seriesData[col][j][2], data.state_idx);
+                        });
+                    }
+                }
+            }
+
+            updateRealTimeUI(data.state_idx, data.probs, data.win_idx + 1, totalWindows);
+
+            if (!pendingUpdate) {
+                pendingUpdate = true;
+                requestAnimationFrame(() => {
+                    myChart.setOption({
+                        series: sensorCols.map(col => ({ name: col, data: seriesData[col] }))
+                    });
+                    pendingUpdate = false;
+                });
+            }
+        }
+        else if (data.type === 'done') {
+            document.getElementById('predict-btn').disabled = false;
+            const overallBox = document.getElementById('overall-status');
+            const overallText = document.getElementById('overall-state-name');
+            overallText.innerText = data.status;
+            overallBox.style.backgroundColor = data.dominant_class === 0 ? '#4caf50' : '#f44336';
+
+            myChart.setOption({
+                series: sensorCols.map(col => ({ name: col, data: seriesData[col] }))
+            });
+            M.toast({html: '全量数据推理完成！', classes: 'green rounded'});
+        }
+    }
+
+    function updateRealTimeUI(stateIdx, probs, currentWin, totalWin) {
+        const stateBox = document.getElementById('real-time-status');
+        const stateNameEl = document.getElementById('current-state-name');
+        const timeStepEl = document.getElementById('current-timestep');
+
+        timeStepEl.innerText = `处理进度: ${currentWin} / ${totalWin} 窗口`;
+        if (stateIdx === 0) {
+            stateBox.style.backgroundColor = '#4caf50';
+            stateNameEl.innerText = `当前状态: ${classNames[0]}`;
+        } else {
+            stateBox.style.backgroundColor = '#f44336';
+            stateNameEl.innerText = `预警: ${classNames[stateIdx]}`;
+        }
+
+        probs.forEach((p, idx) => {
+            const percentage = (p * 100).toFixed(1);
+            document.getElementById(`prob-val-${idx}`).innerText = `${percentage}%`;
+            document.getElementById(`prob-bar-${idx}`).style.width = `${percentage}%`;
+
+            const labelTextEl = document.getElementById(`prob-val-${idx}`).previousElementSibling;
+            if (idx !== 0 && percentage > 20) {
+                labelTextEl.style.color = '#f44336';
+                labelTextEl.style.fontWeight = 'bold';
+            } else {
+                labelTextEl.style.color = '#424242';
+                labelTextEl.style.fontWeight = '500';
+            }
+        });
+    }
+
+    window.addEventListener('resize', () => { myChart.resize(); });
+</script>
+</body>
+</html>
