@@ -98,5 +98,15 @@ python app.py
 
 ---
 
+## 🙏 致谢与引用 (Acknowledgments)
+本项目使用的原始传感器数据来源于巴西国家石油公司 (Petrobras) 开源的 **3W Dataset**。
+感谢 Petrobras 对工业界开源数据集的巨大贡献！
+
+- **3W 数据集官方 GitHub 仓库**：[https://github.com/petrobras/3W](https://github.com/petrobras/3W)
+
+如果你在研究中使用了本项目或 3W 数据集，请考虑引用原作者的相关文献。
+
+---
+
 ## 📄 许可证 (License)
 本项目采用 [MIT License](LICENSE) 开源协议。
