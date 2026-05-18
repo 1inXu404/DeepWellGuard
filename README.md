@@ -1,0 +1,102 @@
+# DeepWellGuard: Oil Well Anomaly Detection System
+
+<p align="center">
+  <img src="https://img.shields.io/badge/PyTorch-EE4C2C?style=flat-square&logo=pytorch&logoColor=white" alt="PyTorch">
+  <img src="https://img.shields.io/badge/Flask-000000?style=flat-square&logo=flask&logoColor=white" alt="Flask">
+  <img src="https://img.shields.io/badge/Python-3.12-3776AB?style=flat-square&logo=python&logoColor=white" alt="Python">
+  <img src="https://img.shields.io/badge/License-MIT-green.svg" alt="License">
+</p>
+
+本项目为**《基于 CNN-LSTM-Attention 的油井不良事件检测系统设计》**的官方代码实现。
+针对真实工业场景下的油井多传感器时序数据（基于 3W Dataset），提出了一种融合多尺度卷积、挤压激励（SE）通道注意力与时间自注意力的深度学习架构，实现了工业级流式传感器数据的实时故障诊断。
+
+---
+
+## 🌟 核心亮点 (Key Features)
+
+- 🧠 **融合式混合架构**：突破传统单一模型限制，完美融合空间局部特征（CNN）与长时序演进因果关系（LSTM）。
+- 🔭 **多尺度与双重注意力机制**：
+  - **MSCNN (多尺度卷积)**：并行使用 3、7、11 三种尺寸的卷积核，同时捕捉瞬间突变与缓慢憋压。
+  - **SE Block (通道注意力)**：动态评估 22 个传感器的权重，自动静音无效背景噪声。
+  - **Multi-Head Temporal Attention (时间注意力)**：在 120 个时间步中自动聚焦最具决定性的异常关键帧。
+- ⚡ **工业级流式推理流**：采用降采样、PyArrow 极速读取、向量化预处理与 GPU 批推理技术，实现 Web 端秒级响应。
+- 📊 **压倒性的性能表现**：在近 10 万规模的独立测试集上，相比纯 LSTM 基线，改进模型的 **Macro F1 从 93.71% 暴涨至 95.16%**。
+
+---
+
+## 📈 实验结果 (Results)
+
+| 模型架构 | 准确率 (Accuracy) | 加权 F1 (Weighted F1) | 宏 F1 (Macro F1) |
+| :--- | :---: | :---: | :---: |
+| 纯 LSTM 基线 | 94.04% | 94.10% | 93.71% |
+| **CNN-LSTM-Attention (改进版)** | **94.94%** | **94.96%** | **95.16%** 🚀 |
+
+<p align="center">
+  <img src="results/figures/comparison_bar.png" width="80%">
+</p>
+
+> *注：上述结果已排除数据量极少的 2, 7, 8 类别。实验数据切分采用严格的分层随机抽样 (Stratified Random Sampling)，其中 20% 作为从未参与训练的绝对独立测试集 (Holdout Test Set)。*
+
+---
+
+## 📂 项目结构 (Project Structure)
+
+```text
+DeepWellGuard/
+├── app.py                      # Flask 实时流式监控前端入口
+├── scripts/                    # 执行脚本存放区
+│   ├── create_demo_file.py     # 自动缝合生成包含所有故障的时序测试文件
+│   ├── train_cnn_lstm_attn.py  # 训练改进版模型的入口
+│   ├── train_lstm.py           # 训练 LSTM 基线模型的入口
+│   ├── compare.py              # 模型对比与评估画图脚本
+│   └── cleanup_models.py       # 自动清理历史废弃权重的脚本
+├── src/
+│   ├── data/                   # 数据预处理与 DataLoader 模块
+│   ├── models/                 # PyTorch 网络架构定义
+│   │   ├── cnn_lstm_attention.py
+│   │   └── lstm.py
+│   ├── train/                  # 训练循环控制、早停、AMP、评估计算
+│   └── utils/                  # 全局超参数与配置文件 (config.py)
+├── results/                    # 实验成果存放区 (权重、图表、日志)
+├── templates/ & static/        # Web 监控平台 UI 资源
+└── requirements.txt            # 项目依赖
+```
+
+---
+
+## 🚀 快速开始 (Quick Start)
+
+### 1. 环境安装
+```bash
+git clone https://github.com/YourUsername/DeepWellGuard.git
+cd DeepWellGuard
+pip install -r requirements.txt
+```
+
+### 2. 模型训练与评估
+确保你已下载 `3w_dataset_2.0.0` 数据集并放置在根目录下，然后依次运行：
+```bash
+# 训练 LSTM 基线与改进模型
+python scripts/train_lstm.py --epochs 100 --batch-size 128
+python scripts/train_cnn_lstm_attn.py --epochs 100 --batch-size 128
+
+# 评估、生成对比指标及混淆矩阵
+python scripts/compare.py
+python scripts/detailed_metrics.py
+```
+
+### 3. 启动流式监控大屏
+你可以生成一段包含所有故障连续发生的测试流数据，并通过网页上传监控。
+```bash
+# 生成包含全类别的长序列测试文件 (存至 uploads/demo_test_sequence.parquet)
+python scripts/create_demo_file.py
+
+# 启动 Web 前端界面
+python app.py
+```
+浏览器打开 `http://127.0.0.1:5000`，选择生成的 parquet 测试文件，体验毫秒级流式故障诊断。
+
+---
+
+## 📄 许可证 (License)
+本项目采用 [MIT License](LICENSE) 开源协议。
