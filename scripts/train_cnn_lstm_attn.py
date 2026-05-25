@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 import argparse
 import os
-import random
 import sys
 from datetime import datetime
 
@@ -15,7 +14,7 @@ from src.data.dataset import OilWellDataset  # noqa: E402
 from src.models.cnn_lstm_attention import CNNLSTMAttention  # noqa: E402
 from src.train.evaluate import compute_metrics  # noqa: E402
 from src.train.trainer import Trainer  # noqa: E402
-from src.utils.config import BATCH_SIZE, EARLY_STOPPING_PATIENCE, MAX_EPOCHS, RETAINED_CLASSES, SEED  # noqa: E402
+from src.utils.config import BATCH_SIZE, EARLY_STOPPING_PATIENCE, MAX_EPOCHS, RETAINED_CLASSES, SEED, set_global_seed  # noqa: E402
 from src.utils.device import get_device  # noqa: E402
 
 
@@ -35,9 +34,7 @@ def main() -> None:
     os.makedirs(metrics_dir, exist_ok=True)
     print(f"Run ID: {run_id}")
 
-    torch.manual_seed(args.seed)
-    np.random.seed(args.seed)
-    random.seed(args.seed)
+    set_global_seed(args.seed)
 
     device = get_device()
     use_cuda = device.type == "cuda"
@@ -61,7 +58,14 @@ def main() -> None:
     class_counts = np.where(class_counts == 0, 1, class_counts)
     sample_weights = 1.0 / np.sqrt(class_counts[train_labels])
     num_train_samples = int(len(train_ds) * args.subset)
-    sampler = WeightedRandomSampler(sample_weights, num_train_samples, replacement=True)
+    sampler_generator = torch.Generator()
+    sampler_generator.manual_seed(args.seed)
+    sampler = WeightedRandomSampler(
+        sample_weights,
+        num_train_samples,
+        replacement=True,
+        generator=sampler_generator,
+    )
 
     if args.subset < 1.0:
         val_indices = np.random.choice(len(val_ds), int(len(val_ds) * args.subset), replace=False)

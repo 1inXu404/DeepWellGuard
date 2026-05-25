@@ -1,3 +1,4 @@
+import os
 import random
 
 import numpy as np
@@ -37,6 +38,34 @@ ATTN_DROPOUT = 0.1
 
 # Reproducibility
 SEED = 42
-torch.manual_seed(SEED)
-np.random.seed(SEED)
-random.seed(SEED)
+
+
+def set_global_seed(seed: int = SEED, deterministic: bool = True) -> None:
+    """Set random seeds for Python, NumPy, and PyTorch.
+
+    Args:
+        seed: Random seed used across the project.
+        deterministic: If True, prefer deterministic CUDA/cuDNN behavior.
+    """
+    os.environ["PYTHONHASHSEED"] = str(seed)
+    os.environ.setdefault("CUBLAS_WORKSPACE_CONFIG", ":4096:8")
+
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed(seed)
+        torch.cuda.manual_seed_all(seed)
+
+    if deterministic:
+        torch.backends.cudnn.benchmark = False
+        torch.backends.cudnn.deterministic = True
+        torch.use_deterministic_algorithms(True, warn_only=True)
+    else:
+        torch.backends.cudnn.benchmark = True
+        torch.backends.cudnn.deterministic = False
+        torch.use_deterministic_algorithms(False)
+
+
+set_global_seed(SEED)
