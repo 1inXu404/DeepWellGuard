@@ -16,7 +16,7 @@ from sklearn.model_selection import train_test_split
 # Add project root to path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from src.data.loader import list_files_by_class, stratified_holdout_split, separate_holdout_files  # noqa: E402
+from src.data.loader import list_files_by_class, stratified_holdout_split, separate_holdout_files, split_from_existing_holdout  # noqa: E402
 from src.data.preprocessor import preprocess_single_file, save_preprocessed  # noqa: E402
 from src.utils.config import SEED, HOLDOUT_RATIO  # noqa: E402
 
@@ -33,16 +33,21 @@ def main():
     print(f"  Found {total_files} files across {len(files_by_class)} classes: "
           f"{ {k: len(v) for k, v in files_by_class.items()} }")
 
-    # Step 2: Stratified holdout split (Test set)
-    print("\n[2/4] Stratified holdout split...")
-    train_val_files, test_files = stratified_holdout_split(
-        files_by_class, holdout_ratio=HOLDOUT_RATIO, seed=SEED
-    )
+    # Step 2: Reuse existing holdout if present; otherwise create one.
+    print("\n[2/4] Preparing holdout split...")
+    existing_split = split_from_existing_holdout(files_by_class)
+    if existing_split is not None:
+        train_val_files, test_files = existing_split
+        print("  Reusing existing holdout files from data/holdout_test")
+    else:
+        train_val_files, test_files = stratified_holdout_split(
+            files_by_class, holdout_ratio=HOLDOUT_RATIO, seed=SEED
+        )
+        separate_holdout_files(train_val_files, test_files)
+        print("  Created new stratified holdout split")
+
     print(f"  Train+Val: {sum(len(v) for v in train_val_files.values())} files")
     print(f"  Test:  {sum(len(v) for v in test_files.values())} files")
-
-    # Separate holdout files to disk
-    separate_holdout_files(train_val_files, test_files)
 
     # Step 3: Train/Val split
     print("\n[3/4] Creating Train/Val split...")

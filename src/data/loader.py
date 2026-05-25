@@ -112,6 +112,70 @@ def stratified_holdout_split(
     return train_dict, test_dict
 
 
+def split_from_existing_holdout(
+    files_by_class: Dict[int, List[str]],
+    holdout_dir: str = "data/holdout_test",
+) -> Optional[Tuple[Dict[int, List[str]], Dict[int, List[str]]]]:
+    """Reuse an existing holdout directory as the fixed test split.
+
+    If ``holdout_dir`` contains files under ``class_<N>/`` directories, those
+    files are used as the test split. The train split is built from
+    ``files_by_class`` after excluding files with the same basename in the same
+    class. This prevents rerunning preprocessing from silently creating a new
+    holdout split.
+
+    Args:
+        files_by_class: Mapping from original class label to source dataset
+            file paths.
+        holdout_dir: Existing holdout root, usually ``data/holdout_test``.
+
+    Returns:
+        ``(train_files_by_class, test_files_by_class)`` when reusable holdout
+        files exist, otherwise ``None``.
+    """
+    holdout_dir = os.path.abspath(holdout_dir)
+    if not os.path.isdir(holdout_dir):
+        return None
+
+    test_files: Dict[int, List[str]] = defaultdict(list)
+    for entry in sorted(os.scandir(holdout_dir), key=lambda e: e.name):
+        if not entry.is_dir() or not entry.name.startswith("class_"):
+            continue
+        try:
+            class_label = int(entry.name.split("_", 1)[1])
+        except (IndexError, ValueError):
+            continue
+        if class_label not in files_by_class:
+            continue
+
+        parquet_files = [
+            os.path.join(entry.path, f)
+            for f in os.listdir(entry.path)
+            if f.endswith(".parquet")
+        ]
+        if parquet_files:
+            test_files[class_label].extend(sorted(parquet_files))
+
+    if not test_files:
+        return None
+
+    test_basenames = {
+        class_label: {os.path.basename(path) for path in paths}
+        for class_label, paths in test_files.items()
+    }
+
+    train_files: Dict[int, List[str]] = {}
+    for class_label, paths in sorted(files_by_class.items()):
+        excluded = test_basenames.get(class_label, set())
+        train_files[class_label] = [
+            path for path in sorted(paths)
+            if os.path.basename(path) not in excluded
+        ]
+        test_files.setdefault(class_label, [])
+
+    return dict(sorted(train_files.items())), dict(sorted(test_files.items()))
+
+
 def separate_holdout_files(
     train_files: Dict[int, List[str]],
     test_files: Dict[int, List[str]],

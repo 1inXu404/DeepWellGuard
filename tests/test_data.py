@@ -1,11 +1,16 @@
 """Tests for data pipeline: loader + preprocessor."""
 
 import glob
+from pathlib import Path
 
 import numpy as np
 import pytest
 
-from src.data.loader import list_files_by_class, stratified_holdout_split
+from src.data.loader import (
+    list_files_by_class,
+    split_from_existing_holdout,
+    stratified_holdout_split,
+)
 from src.data.preprocessor import preprocess_single_file
 
 
@@ -26,6 +31,28 @@ class TestDataLoader:
         total = sum(len(v) for v in files.values())
         test_total = sum(len(v) for v in test.values())
         assert 0.15 * total < test_total < 0.25 * total
+
+    def test_existing_holdout_split_reuses_files(self, tmp_path):
+        """Existing holdout files should define test split and be excluded from train."""
+        dataset_file = tmp_path / "dataset" / "0" / "WELL-001.parquet"
+        dataset_file.parent.mkdir(parents=True)
+        dataset_file.write_text("placeholder")
+
+        other_file = tmp_path / "dataset" / "0" / "WELL-002.parquet"
+        other_file.write_text("placeholder")
+
+        holdout_file = tmp_path / "holdout" / "class_0" / "WELL-001.parquet"
+        holdout_file.parent.mkdir(parents=True)
+        holdout_file.write_text("placeholder")
+
+        train, test = split_from_existing_holdout(
+            {0: [str(dataset_file), str(other_file)]},
+            holdout_dir=str(tmp_path / "holdout"),
+        )
+
+        assert test[0] == [str(holdout_file)]
+        assert train[0] == [str(other_file)]
+        assert Path(train[0][0]).name != Path(test[0][0]).name
 
 
 class TestPreprocessor:
