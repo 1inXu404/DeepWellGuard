@@ -48,6 +48,7 @@ DeepWellGuard/
 │   ├── create_demo_file.py     # 自动缝合生成包含所有故障的时序测试文件
 │   ├── train_cnn_lstm_attn.py  # 训练改进版模型的入口
 │   ├── train_lstm.py           # 训练 LSTM 基线模型的入口
+│   ├── train_ablation.py       # CNN-LSTM-Attention 消融实验入口
 │   ├── compare.py              # 模型对比与评估画图脚本
 │   └── cleanup_models.py       # 自动清理历史废弃权重的脚本
 ├── src/
@@ -79,6 +80,9 @@ pip install -r requirements.txt
 # 训练 LSTM 基线与改进模型
 python scripts/train_lstm.py --epochs 100 --batch-size 128
 python scripts/train_cnn_lstm_attn.py --epochs 100 --batch-size 128
+
+# 运行消融实验：full / no_derivative / single_scale / no_se / no_temporal_attention
+python scripts/train_ablation.py --epochs 100 --batch-size 128
 
 # 评估、生成对比指标及混淆矩阵
 python scripts/compare.py

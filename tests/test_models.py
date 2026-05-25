@@ -5,6 +5,7 @@ import torch.nn as nn
 
 from src.models.lstm import LSTMModel
 from src.models.cnn_lstm_attention import CNNLSTMAttention
+from src.models.ablation import ABLATION_CONFIGS, AblationCNNLSTMAttention
 
 
 # ---------------------------------------------------------------------------
@@ -111,3 +112,15 @@ class TestCNNLSTMAttention:
     def test_params_count(self):
         n_attn = sum(p.numel() for p in CNNLSTMAttention().parameters())
         assert n_attn > 0, "Model should have parameters"
+
+
+class TestAblationCNNLSTMAttention:
+    """Tests for all ablation variants."""
+
+    def test_all_variants_forward_shape(self):
+        for config in ABLATION_CONFIGS.values():
+            _forward_shape_test(AblationCNNLSTMAttention(config))
+
+    def test_all_variants_predict(self):
+        for config in ABLATION_CONFIGS.values():
+            _predict_test(AblationCNNLSTMAttention(config))
