@@ -44,6 +44,9 @@ data/interim/
 logs/
 *.log
 
+# Local one-off server scripts
+scripts/run_all_experiments_shutdown.sh
+
 # Jupyter
 .ipynb_checkpoints/
 */.ipynb_checkpoints/*
