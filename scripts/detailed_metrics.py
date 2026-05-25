@@ -32,7 +32,9 @@ def _resolve_key(data, *candidates):
 
 def main():
     file_name_mapping = {
-        "LSTM": "lstmmodel_predictions.npz",
+        "CNN": "cnnmodel_predictions.npz",
+        "Uni-LSTM": "unilstmmodel_predictions.npz",
+        "Bi-LSTM": "bilstmmodel_predictions.npz",
         "CNN-LSTM-Attention": "cnnlstmattention_predictions.npz"
     }
 
@@ -43,7 +45,7 @@ def main():
     reports_root.mkdir(parents=True, exist_ok=True)
     figures_root.mkdir(parents=True, exist_ok=True)
 
-    models_to_evaluate = ["LSTM", "CNN-LSTM-Attention"]
+    models_to_evaluate = ["CNN", "Uni-LSTM", "Bi-LSTM", "CNN-LSTM-Attention"]
     # We will use indices 0 to 6 for the labels as requested by the user.
     class_names = [str(i) for i in range(7)]
 

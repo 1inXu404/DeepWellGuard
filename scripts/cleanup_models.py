@@ -18,7 +18,7 @@ def main():
         return
 
     # Dictionary to keep track of the latest directory for each model file type
-    # e.g., 'lstmmodel.pt' -> Path('results/models/20260517_153236')
+    # e.g., 'bilstmmodel.pt' -> Path('results/models/20260517_153236')
     latest_models = {}
 
     # List all subdirectories (which are timestamp folders)

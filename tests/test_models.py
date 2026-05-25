@@ -1,10 +1,14 @@
-"""Pytest tests for all models: LSTM, CNN-LSTM-Attention."""
+"""Pytest tests for all models: CNN, Bi-LSTM, CNN-LSTM-Attention."""
 
 import torch
 import torch.nn as nn
+import tempfile
+from pathlib import Path
 
-from src.models.lstm import LSTMModel
+from src.models.cnn import CNNModel
+from src.models.bilstm import BiLSTMModel
 from src.models.cnn_lstm_attention import CNNLSTMAttention
+from src.models.unilstm import UniLSTMModel
 from src.models.ablation import ABLATION_CONFIGS, AblationCNNLSTMAttention
 
 
@@ -46,45 +50,93 @@ def _predict_test(model: nn.Module):
     assert all(0 <= x < 7 for x in preds), f"Predictions out of range: {preds}"
 
 
-def _save_load_test(model: nn.Module, path: str = "/tmp/_test_model.pt"):
+def _save_load_test(model: nn.Module):
     """Verify save/load round-trip preserves forward pass results."""
-    torch.save(model.state_dict(), path)
-    model_cls = type(model)
-    loaded = model_cls()
-    loaded.load_state_dict(torch.load(path, weights_only=True))
-    x = torch.randn(4, 22, 120)
-    # Switch to eval mode so Dropout/BatchNorm behave deterministically
-    model.eval()
-    loaded.eval()
-    with torch.no_grad():
-        expected = model(x)
-        actual = loaded(x)
-    assert torch.allclose(expected, actual, atol=1e-6), (
-        "Loaded model forward differs from original"
-    )
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        path = Path(tmp_dir) / "_test_model.pt"
+        torch.save(model.state_dict(), path)
+        model_cls = type(model)
+        loaded = model_cls()
+        loaded.load_state_dict(torch.load(path, weights_only=True))
+        x = torch.randn(4, 22, 120)
+        # Switch to eval mode so Dropout/BatchNorm behave deterministically
+        model.eval()
+        loaded.eval()
+        with torch.no_grad():
+            expected = model(x)
+            actual = loaded(x)
+        assert torch.allclose(expected, actual, atol=1e-6), (
+            "Loaded model forward differs from original"
+        )
 
 
 # ---------------------------------------------------------------------------
-# LSTM
+# CNN
 # ---------------------------------------------------------------------------
 
-class TestLSTM:
-    """Tests for LSTMModel."""
+class TestCNN:
+    """Tests for CNNModel."""
 
     def test_forward_shape(self):
-        _forward_shape_test(LSTMModel())
+        _forward_shape_test(CNNModel())
 
     def test_overfit(self):
-        losses = _overfit_single_batch(LSTMModel())
+        losses = _overfit_single_batch(CNNModel())
         assert losses[-1] < losses[0], (
             f"Loss did not decrease: {losses[0]:.4f} -> {losses[-1]:.4f}"
         )
 
     def test_predict(self):
-        _predict_test(LSTMModel())
+        _predict_test(CNNModel())
 
     def test_save_load(self):
-        _save_load_test(LSTMModel())
+        _save_load_test(CNNModel())
+
+
+# ---------------------------------------------------------------------------
+# Uni-LSTM
+# ---------------------------------------------------------------------------
+
+class TestUniLSTM:
+    """Tests for UniLSTMModel."""
+
+    def test_forward_shape(self):
+        _forward_shape_test(UniLSTMModel())
+
+    def test_overfit(self):
+        losses = _overfit_single_batch(UniLSTMModel())
+        assert losses[-1] < losses[0], (
+            f"Loss did not decrease: {losses[0]:.4f} -> {losses[-1]:.4f}"
+        )
+
+    def test_predict(self):
+        _predict_test(UniLSTMModel())
+
+    def test_save_load(self):
+        _save_load_test(UniLSTMModel())
+
+
+# ---------------------------------------------------------------------------
+# Bi-LSTM
+# ---------------------------------------------------------------------------
+
+class TestBiLSTM:
+    """Tests for BiLSTMModel."""
+
+    def test_forward_shape(self):
+        _forward_shape_test(BiLSTMModel())
+
+    def test_overfit(self):
+        losses = _overfit_single_batch(BiLSTMModel())
+        assert losses[-1] < losses[0], (
+            f"Loss did not decrease: {losses[0]:.4f} -> {losses[-1]:.4f}"
+        )
+
+    def test_predict(self):
+        _predict_test(BiLSTMModel())
+
+    def test_save_load(self):
+        _save_load_test(BiLSTMModel())
 
 
 # ---------------------------------------------------------------------------

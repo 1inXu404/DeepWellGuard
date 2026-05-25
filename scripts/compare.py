@@ -40,7 +40,7 @@ def main():
     parser.add_argument(
         "--models",
         nargs="+",
-        default=["LSTM", "CNN-LSTM-Attention"],
+        default=["CNN", "Uni-LSTM", "Bi-LSTM", "CNN-LSTM-Attention"],
         help="Names of models to compare. Prediction files must be in results/metrics/[name]_predictions.npz"
     )
     args = parser.parse_args()
@@ -48,7 +48,9 @@ def main():
     # Map the model names to their expected prediction file paths
     # Handle the specific name mapping used in training scripts
     file_name_mapping = {
-        "LSTM": "lstmmodel_predictions.npz",
+        "CNN": "cnnmodel_predictions.npz",
+        "Uni-LSTM": "unilstmmodel_predictions.npz",
+        "Bi-LSTM": "bilstmmodel_predictions.npz",
         "CNN-LSTM-Attention": "cnnlstmattention_predictions.npz"
     }
 
