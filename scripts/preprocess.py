@@ -6,7 +6,6 @@ Performs: stratified holdout -> train/val split -> per-file preprocessing -> num
 
 import sys
 import os
-import json
 from collections import Counter
 
 import numpy as np
@@ -16,9 +15,14 @@ from sklearn.model_selection import train_test_split
 # Add project root to path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from src.data.loader import list_files_by_class, stratified_holdout_split, separate_holdout_files, split_from_existing_holdout  # noqa: E402
+from src.data.loader import (  # noqa: E402
+    limit_files_per_class,
+    list_files_by_class,
+    separate_holdout_files,
+    stratified_holdout_split,
+)
 from src.data.preprocessor import preprocess_single_file, save_preprocessed  # noqa: E402
-from src.utils.config import SEED, HOLDOUT_RATIO  # noqa: E402
+from src.utils.config import HOLDOUT_RATIO, MAX_FILES_PER_CLASS, SEED, VAL_RATIO  # noqa: E402
 
 
 def main():
@@ -32,19 +36,21 @@ def main():
     total_files = sum(len(v) for v in files_by_class.values())
     print(f"  Found {total_files} files across {len(files_by_class)} classes: "
           f"{ {k: len(v) for k, v in files_by_class.items()} }")
+    files_by_class = limit_files_per_class(
+        files_by_class,
+        max_files_per_class=MAX_FILES_PER_CLASS,
+        seed=SEED,
+    )
+    print(f"  Selected {MAX_FILES_PER_CLASS} files per retained class: "
+          f"{ {k: len(v) for k, v in files_by_class.items()} }")
 
-    # Step 2: Reuse existing holdout if present; otherwise create one.
+    # Step 2: Split holdout after balancing each class to 106 files.
     print("\n[2/4] Preparing holdout split...")
-    existing_split = split_from_existing_holdout(files_by_class)
-    if existing_split is not None:
-        train_val_files, test_files = existing_split
-        print("  Reusing existing holdout files from data/holdout_test")
-    else:
-        train_val_files, test_files = stratified_holdout_split(
-            files_by_class, holdout_ratio=HOLDOUT_RATIO, seed=SEED
-        )
-        separate_holdout_files(train_val_files, test_files)
-        print("  Created new stratified holdout split")
+    train_val_files, test_files = stratified_holdout_split(
+        files_by_class, holdout_ratio=HOLDOUT_RATIO, seed=SEED
+    )
+    separate_holdout_files(train_val_files, test_files)
+    print("  Created holdout split from the balanced 106-file-per-class set")
 
     print(f"  Train+Val: {sum(len(v) for v in train_val_files.values())} files")
     print(f"  Test:  {sum(len(v) for v in test_files.values())} files")
@@ -58,9 +64,13 @@ def main():
             all_train_val_paths.append(path)
             all_train_val_labels.append(class_label)
 
-    # 80/20 split of the remaining training files
+    # Split the remaining 85% so final ratios are approximately 70/15/15.
+    val_size_within_train_val = VAL_RATIO / (1.0 - HOLDOUT_RATIO)
     train_paths, val_paths = train_test_split(
-        all_train_val_paths, test_size=0.2, stratify=all_train_val_labels, random_state=SEED
+        all_train_val_paths,
+        test_size=val_size_within_train_val,
+        stratify=all_train_val_labels,
+        random_state=SEED,
     )
 
     # Helper function to process a list of paths

@@ -7,6 +7,7 @@ import numpy as np
 import pytest
 
 from src.data.loader import (
+    limit_files_per_class,
     list_files_by_class,
     split_from_existing_holdout,
     stratified_holdout_split,
@@ -24,13 +25,12 @@ class TestDataLoader:
         assert classes == [0, 1, 3, 4, 5, 6, 9]
 
     def test_holdout_ratio(self):
-        """stratified_holdout_split with holdout_ratio=0.2 should yield ~20% test
-        files (within a 15-25% window)."""
+        """stratified_holdout_split with holdout_ratio=0.15 should yield ~15% test."""
         files = list_files_by_class()
-        train, test = stratified_holdout_split(files, holdout_ratio=0.2, seed=42)
+        train, test = stratified_holdout_split(files, holdout_ratio=0.15, seed=42)
         total = sum(len(v) for v in files.values())
         test_total = sum(len(v) for v in test.values())
-        assert 0.15 * total < test_total < 0.25 * total
+        assert 0.10 * total < test_total < 0.20 * total
 
     def test_existing_holdout_split_reuses_files(self, tmp_path):
         """Existing holdout files should define test split and be excluded from train."""
@@ -53,6 +53,25 @@ class TestDataLoader:
         assert test[0] == [str(holdout_file)]
         assert train[0] == [str(other_file)]
         assert Path(train[0][0]).name != Path(test[0][0]).name
+
+    def test_limit_files_per_class_caps_each_class(self):
+        files = {0: [f"class0_{i}.parquet" for i in range(10)]}
+        limited = limit_files_per_class(files, max_files_per_class=4, seed=42)
+        assert len(limited[0]) == 4
+        assert limited == limit_files_per_class(files, max_files_per_class=4, seed=42)
+
+    def test_limit_then_holdout_split_uses_balanced_class_count(self):
+        files = {0: [f"class0_{i}.parquet" for i in range(20)]}
+        limited = limit_files_per_class(files, max_files_per_class=10, seed=42)
+        train, test = stratified_holdout_split(
+            limited,
+            holdout_ratio=0.15,
+            seed=42,
+        )
+
+        assert len(limited[0]) == 10
+        assert len(test[0]) == 2
+        assert len(train[0]) == 8
 
 
 class TestPreprocessor:

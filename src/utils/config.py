@@ -15,7 +15,9 @@ N_FEATURES = 22  # After removing UNUSED_TAGS from 27 sensors
 N_CLASSES = 7  # Classes 0,1,3,4,5,6,9 (excluded 2,7,8)
 EXCLUDED_CLASSES = [2, 7, 8]
 RETAINED_CLASSES = [0, 1, 3, 4, 5, 6, 9]
-HOLDOUT_RATIO = 0.2  # Per-class stratified holdout ratio
+HOLDOUT_RATIO = 0.15  # Final holdout ratio: train/val/holdout ~= 70/15/15
+VAL_RATIO = 0.15  # Final validation ratio
+MAX_FILES_PER_CLASS = 106  # Balance retained classes by capping file count
 
 # Training hyperparameters
 BATCH_SIZE = 32

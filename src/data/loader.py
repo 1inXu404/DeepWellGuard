@@ -12,7 +12,7 @@ import shutil
 from collections import defaultdict
 from typing import Dict, List, Optional, Tuple
 
-from src.utils.config import EXCLUDED_CLASSES, HOLDOUT_RATIO, SEED
+from src.utils.config import EXCLUDED_CLASSES, HOLDOUT_RATIO, MAX_FILES_PER_CLASS, SEED
 
 DATASET_ROOT = os.path.join(os.path.dirname(__file__), "..", "..", "3w_dataset_2.0.0")
 
@@ -102,7 +102,7 @@ def stratified_holdout_split(
         ordered = sorted(file_paths)  # stable order before shuffle
         rng.shuffle(ordered)
 
-        n_test = max(1, int(len(ordered) * holdout_ratio))
+        n_test = max(1, round(len(ordered) * holdout_ratio))
         test_paths = ordered[:n_test]
         train_paths = ordered[n_test:]
 
@@ -110,6 +110,30 @@ def stratified_holdout_split(
         test_dict[class_label] = sorted(test_paths)
 
     return train_dict, test_dict
+
+
+def limit_files_per_class(
+    files_by_class: Dict[int, List[str]],
+    max_files_per_class: int = MAX_FILES_PER_CLASS,
+    seed: int = SEED,
+) -> Dict[int, List[str]]:
+    """Limit each class to at most ``max_files_per_class`` files.
+
+    The selection is random but deterministic, controlled by ``seed``. Classes
+    with fewer files are kept as-is.
+    """
+    rng = random.Random(seed)
+    limited: Dict[int, List[str]] = {}
+
+    for class_label, paths in sorted(files_by_class.items()):
+        ordered = sorted(paths)
+        if len(ordered) > max_files_per_class:
+            selected = rng.sample(ordered, max_files_per_class)
+        else:
+            selected = ordered
+        limited[class_label] = sorted(selected)
+
+    return limited
 
 
 def split_from_existing_holdout(
@@ -182,6 +206,7 @@ def separate_holdout_files(
     output_dir: str = "data/holdout_test",
     seed: int = SEED,
     holdout_ratio: float = HOLDOUT_RATIO,
+    clear_existing: bool = True,
 ) -> None:
     """Physically copy test .parquet files into a dedicated holdout directory.
 
@@ -197,8 +222,11 @@ def separate_holdout_files(
         output_dir: Destination root for the holdout tree.
         seed: Random seed recorded in the manifest.
         holdout_ratio: Holdout ratio recorded in the manifest.
+        clear_existing: Remove old holdout files before writing the new split.
     """
     output_dir = os.path.abspath(output_dir)
+    if clear_existing and os.path.isdir(output_dir):
+        shutil.rmtree(output_dir)
 
     manifest: dict = {
         "seed": seed,
