@@ -1,4 +1,4 @@
-"""CNN-LSTM-Attention hybrid model for oil well event detection.
+"""CNN-LSTM-Channel-Attention hybrid model for oil well event detection.
 
 Input:  (batch, 22 sensors, 120 time steps)
 Output: (batch, 7) logits for 7 event classes.
@@ -6,14 +6,10 @@ Output: (batch, 7) logits for 7 event classes.
 Architecture:
 - 1st Derivative concatenation (captures sudden changes)
 - Multi-Scale CNN blocks (k=3, 7, 11) for different temporal scales
-- Squeeze-and-Excitation (SE) blocks for Channel/Sensor Attention
 - BiLSTM Temporal Encoder
-- Multi-Head Self-Attention (Temporal Attention)
+- Channel Attention over post-BiLSTM features
 - Global Max Pooling to capture anomaly peaks
 - FC classifier
-
-This architecture strictly aligns with the "CNN-LSTM-Attention" thesis title,
-while incorporating cutting-edge Multi-Scale and Channel Attention enhancements.
 """
 
 import torch
@@ -21,24 +17,28 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 
-class SEBlock(nn.Module):
-    """Squeeze-and-Excitation block for Channel/Sensor Attention."""
+class ChannelAttention1d(nn.Module):
+    """Channel attention using average and max temporal descriptors."""
 
-    def __init__(self, channel, reduction=4):
-        super(SEBlock, self).__init__()
+    def __init__(self, channels: int, reduction: int = 4):
+        super().__init__()
+        reduced_channels = max(channels // reduction, 1)
         self.avg_pool = nn.AdaptiveAvgPool1d(1)
-        self.fc = nn.Sequential(
-            nn.Linear(channel, channel // reduction, bias=False),
+        self.max_pool = nn.AdaptiveMaxPool1d(1)
+        self.shared_mlp = nn.Sequential(
+            nn.Linear(channels, reduced_channels, bias=False),
             nn.ReLU(inplace=True),
-            nn.Linear(channel // reduction, channel, bias=False),
-            nn.Sigmoid()
+            nn.Linear(reduced_channels, channels, bias=False),
         )
+        self.sigmoid = nn.Sigmoid()
 
-    def forward(self, x):
-        b, c, _ = x.size()
-        y = self.avg_pool(x).view(b, c)
-        y = self.fc(y).view(b, c, 1)
-        return x * y.expand_as(x)
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Apply channel-wise reweighting to ``(batch, channels, time)``."""
+        avg_descriptor = self.avg_pool(x).squeeze(-1)
+        max_descriptor = self.max_pool(x).squeeze(-1)
+        weights = self.shared_mlp(avg_descriptor) + self.shared_mlp(max_descriptor)
+        weights = self.sigmoid(weights).unsqueeze(-1)
+        return x * weights
 
 
 class MultiScaleConv1d(nn.Module):
@@ -70,9 +70,10 @@ class MultiScaleConv1d(nn.Module):
 
 class CNNLSTMAttention(nn.Module):
     """
-    Advanced CNN-LSTM-Attention Model.
-    Integrates Multi-Scale CNN and SE Channel Attention before feeding into
-    the BiLSTM and Multi-Head Temporal Attention layers.
+    CNN-LSTM-Channel-Attention model.
+
+    Pipeline: 1st derivative -> multi-scale CNN -> BiLSTM ->
+    channel attention -> global max pooling -> classifier.
     """
 
     def __init__(self):
@@ -83,11 +84,9 @@ class CNNLSTMAttention(nn.Module):
 
         # CNN Part: Block 1
         self.ms_block1 = MultiScaleConv1d(in_channels, 96)
-        self.se_block1 = SEBlock(96)
 
         # CNN Part: Block 2
         self.ms_block2 = MultiScaleConv1d(96, 192)
-        self.se_block2 = SEBlock(192)
 
         # LSTM Part: Temporal Encoder
         self.lstm = nn.LSTM(
@@ -98,14 +97,8 @@ class CNNLSTMAttention(nn.Module):
             batch_first=True,
         )
 
-        # Attention Part: Multi-head Temporal Attention
-        self.attention = nn.MultiheadAttention(
-            embed_dim=192,
-            num_heads=4,
-            dropout=0.3,
-            batch_first=True,
-        )
-        self.layer_norm = nn.LayerNorm(192)
+        # Channel Attention over post-BiLSTM high-level temporal features
+        self.channel_attention = ChannelAttention1d(192)
 
         # Classifier head
         self.classifier = nn.Sequential(
@@ -130,26 +123,20 @@ class CNNLSTMAttention(nn.Module):
         diff[:, :, 1:] = x[:, :, 1:] - x[:, :, :-1]
         x = torch.cat([x, diff], dim=1)  # (batch, 44, 120)
 
-        # Step 1: Multi-scale CNN + Channel/Sensor Attention
+        # Step 1: Multi-scale CNN
         x = self.ms_block1(x)  # (batch, 96, 60)
-        x = self.se_block1(x)
         x = self.ms_block2(x)  # (batch, 192, 30)
-        x = self.se_block2(x)
 
         # Step 2: LSTM Temporal Encoding
         x = x.permute(0, 2, 1)  # (batch, 30, 192)
         lstm_out, _ = self.lstm(x)  # (batch, 30, 192)
 
-        # Step 3: Multi-Head Temporal Attention
-        attn_out, _ = self.attention(
-            lstm_out, lstm_out, lstm_out
-        )  # (batch, 30, 192)
-
-        # Residual connection & LayerNorm
-        lstm_out = self.layer_norm(lstm_out + attn_out)
+        # Step 3: Channel Attention over BiLSTM features
+        features = lstm_out.permute(0, 2, 1)  # (batch, 192, 30)
+        features = self.channel_attention(features)
 
         # Step 4: Global Max Pooling
-        pooled = lstm_out.max(dim=1)[0]  # (batch, 192)
+        pooled = features.max(dim=2)[0]  # (batch, 192)
 
         # Step 5: Classifier
         logits = self.classifier(pooled)  # (batch, 7)

@@ -7,7 +7,7 @@ from pathlib import Path
 
 from src.models.cnn import CNNModel
 from src.models.bilstm import BiLSTMModel
-from src.models.cnn_lstm_attention import CNNLSTMAttention
+from src.models.cnn_lstm_attention import ChannelAttention1d, CNNLSTMAttention
 from src.models.unilstm import UniLSTMModel
 from src.models.ablation import ABLATION_CONFIGS, AblationCNNLSTMAttention
 
@@ -164,6 +164,12 @@ class TestCNNLSTMAttention:
     def test_params_count(self):
         n_attn = sum(p.numel() for p in CNNLSTMAttention().parameters())
         assert n_attn > 0, "Model should have parameters"
+
+    def test_channel_attention_shape(self):
+        module = ChannelAttention1d(192)
+        x = torch.randn(4, 192, 30)
+        out = module(x)
+        assert out.shape == x.shape
 
 
 class TestAblationCNNLSTMAttention:

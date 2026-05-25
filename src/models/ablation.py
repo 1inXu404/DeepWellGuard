@@ -1,4 +1,4 @@
-"""Ablation variants for the CNN-LSTM-Attention model.
+"""Ablation variants for the CNN-LSTM-Channel-Attention model.
 
 The variants keep the same input/output contract as the main model:
 input ``(batch, 22, 120)`` and output ``(batch, 7)`` logits.
@@ -10,7 +10,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from src.models.cnn_lstm_attention import MultiScaleConv1d, SEBlock
+from src.models.cnn_lstm_attention import ChannelAttention1d, MultiScaleConv1d
 
 
 @dataclass(frozen=True)
@@ -21,26 +21,23 @@ class AblationConfig:
     use_cnn: bool = True
     use_derivative: bool = True
     use_multiscale: bool = True
-    use_se: bool = True
-    use_temporal_attention: bool = True
+    use_channel_attention: bool = True
 
 
 ABLATION_CONFIGS = {
-    "lstm_attention": AblationConfig(
-        name="lstm_attention",
+    "lstm_channel_attention": AblationConfig(
+        name="lstm_channel_attention",
         use_cnn=False,
         use_derivative=False,
-        use_se=False,
     ),
-    "cnn_lstm": AblationConfig(name="cnn_lstm", use_temporal_attention=False),
+    "cnn_lstm": AblationConfig(name="cnn_lstm", use_channel_attention=False),
     # Additional aliases/variants kept for exploratory runs.
     "full": AblationConfig(name="full"),
     "no_derivative": AblationConfig(name="no_derivative", use_derivative=False),
     "single_scale": AblationConfig(name="single_scale", use_multiscale=False),
-    "no_se": AblationConfig(name="no_se", use_se=False),
-    "no_temporal_attention": AblationConfig(
-        name="no_temporal_attention",
-        use_temporal_attention=False,
+    "no_channel_attention": AblationConfig(
+        name="no_channel_attention",
+        use_channel_attention=False,
     ),
 }
 
@@ -62,7 +59,7 @@ class SingleScaleConv1d(nn.Module):
 
 
 class AblationCNNLSTMAttention(nn.Module):
-    """Configurable CNN-LSTM-Attention model for ablation experiments."""
+    """Configurable CNN-LSTM-Channel-Attention model for ablation experiments."""
 
     def __init__(self, config: AblationConfig):
         super().__init__()
@@ -73,16 +70,11 @@ class AblationCNNLSTMAttention(nn.Module):
 
         if config.use_cnn:
             self.conv_block1 = conv_cls(in_channels, 96)
-            self.se_block1 = SEBlock(96) if config.use_se else nn.Identity()
-
             self.conv_block2 = conv_cls(96, 192)
-            self.se_block2 = SEBlock(192) if config.use_se else nn.Identity()
             lstm_input_size = 192
         else:
             self.conv_block1 = nn.Identity()
-            self.se_block1 = nn.Identity()
             self.conv_block2 = nn.Identity()
-            self.se_block2 = nn.Identity()
             lstm_input_size = in_channels
 
         self.lstm = nn.LSTM(
@@ -93,17 +85,9 @@ class AblationCNNLSTMAttention(nn.Module):
             batch_first=True,
         )
 
-        if config.use_temporal_attention:
-            self.attention = nn.MultiheadAttention(
-                embed_dim=192,
-                num_heads=4,
-                dropout=0.3,
-                batch_first=True,
-            )
-        else:
-            self.attention = None
-
-        self.layer_norm = nn.LayerNorm(192)
+        self.channel_attention = (
+            ChannelAttention1d(192) if config.use_channel_attention else nn.Identity()
+        )
         self.classifier = nn.Sequential(
             nn.Linear(192, 64),
             nn.BatchNorm1d(64),
@@ -120,20 +104,14 @@ class AblationCNNLSTMAttention(nn.Module):
 
         if self.config.use_cnn:
             x = self.conv_block1(x)
-            x = self.se_block1(x)
             x = self.conv_block2(x)
-            x = self.se_block2(x)
 
         x = x.permute(0, 2, 1)
         lstm_out, _ = self.lstm(x)
 
-        if self.attention is not None:
-            attn_out, _ = self.attention(lstm_out, lstm_out, lstm_out)
-            lstm_out = self.layer_norm(lstm_out + attn_out)
-        else:
-            lstm_out = self.layer_norm(lstm_out)
-
-        pooled = lstm_out.max(dim=1)[0]
+        features = lstm_out.permute(0, 2, 1)
+        features = self.channel_attention(features)
+        pooled = features.max(dim=2)[0]
         return self.classifier(pooled)
 
     def predict(self, x: torch.Tensor) -> torch.Tensor:

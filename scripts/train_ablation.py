@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Train and evaluate CNN-LSTM-Attention ablation variants.
+"""Train and evaluate CNN-LSTM-Channel-Attention ablation variants.
 
 Expected cache files:
     results/cache/fold_train_X.npy
@@ -42,7 +42,7 @@ from src.utils.config import (  # noqa: E402
 from src.utils.device import get_device  # noqa: E402
 
 
-DEFAULT_VARIANTS = ["lstm_attention", "cnn_lstm"]
+DEFAULT_VARIANTS = ["lstm_channel_attention", "cnn_lstm"]
 
 
 def build_loaders(args, use_cuda: bool):
@@ -167,7 +167,7 @@ def train_one_variant(variant: str, args, device: torch.device, run_dir: str) ->
 
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description="Run ablation experiments for CNN-LSTM-Attention."
+        description="Run ablation experiments for CNN-LSTM-Channel-Attention."
     )
     parser.add_argument("--epochs", type=int, default=MAX_EPOCHS)
     parser.add_argument("--patience", type=int, default=EARLY_STOPPING_PATIENCE)
