@@ -5,6 +5,7 @@ import sys
 from datetime import datetime
 
 import numpy as np
+import pandas as pd
 import torch
 from torch.utils.data import DataLoader, Subset, WeightedRandomSampler
 
@@ -14,6 +15,7 @@ from src.data.dataset import OilWellDataset  # noqa: E402
 from src.models.lstm import LSTMModel  # noqa: E402
 from src.train.evaluate import compute_metrics  # noqa: E402
 from src.train.trainer import Trainer  # noqa: E402
+from src.visualize.plots import plot_training_curves  # noqa: E402
 from src.utils.config import BATCH_SIZE, EARLY_STOPPING_PATIENCE, MAX_EPOCHS, RETAINED_CLASSES, SEED, set_global_seed  # noqa: E402
 from src.utils.device import get_device  # noqa: E402
 
@@ -30,8 +32,10 @@ def main() -> None:
     run_id = datetime.now().strftime("%Y%m%d_%H%M%S")
     models_dir = os.path.join("results", "models", run_id)
     metrics_dir = os.path.join("results", "metrics", run_id)
+    figures_dir = os.path.join("results", "figures", run_id)
     os.makedirs(models_dir, exist_ok=True)
     os.makedirs(metrics_dir, exist_ok=True)
+    os.makedirs(figures_dir, exist_ok=True)
     print(f"Run ID: {run_id}")
 
     set_global_seed(args.seed)
@@ -85,9 +89,16 @@ def main() -> None:
 
     model = LSTMModel()
     trainer = Trainer(model, device)
-    _ = trainer.fit(
+    history = trainer.fit(
         train_loader, val_loader, epochs=args.epochs, patience=args.patience
     )
+
+    history_path = os.path.join(metrics_dir, "lstmmodel_training_history.csv")
+    pd.DataFrame(history).to_csv(history_path, index_label="epoch")
+    curve_path = os.path.join(figures_dir, "lstmmodel_training_curves.png")
+    plot_training_curves(history, "LSTMModel", save_path=curve_path)
+    print(f"  Training history saved → {history_path}")
+    print(f"  Training curves saved → {curve_path}")
 
     ckpt_path = f"{models_dir}/lstmmodel.pt"
     torch.save(model.state_dict(), ckpt_path)
