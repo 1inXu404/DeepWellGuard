@@ -18,6 +18,7 @@ class AblationConfig:
     """Feature switches for one ablation run."""
 
     name: str
+    use_cnn: bool = True
     use_derivative: bool = True
     use_multiscale: bool = True
     use_se: bool = True
@@ -25,6 +26,14 @@ class AblationConfig:
 
 
 ABLATION_CONFIGS = {
+    "lstm_attention": AblationConfig(
+        name="lstm_attention",
+        use_cnn=False,
+        use_derivative=False,
+        use_se=False,
+    ),
+    "cnn_lstm": AblationConfig(name="cnn_lstm", use_temporal_attention=False),
+    # Additional aliases/variants kept for exploratory runs.
     "full": AblationConfig(name="full"),
     "no_derivative": AblationConfig(name="no_derivative", use_derivative=False),
     "single_scale": AblationConfig(name="single_scale", use_multiscale=False),
@@ -62,14 +71,22 @@ class AblationCNNLSTMAttention(nn.Module):
         in_channels = 44 if config.use_derivative else 22
         conv_cls = MultiScaleConv1d if config.use_multiscale else SingleScaleConv1d
 
-        self.conv_block1 = conv_cls(in_channels, 96)
-        self.se_block1 = SEBlock(96) if config.use_se else nn.Identity()
+        if config.use_cnn:
+            self.conv_block1 = conv_cls(in_channels, 96)
+            self.se_block1 = SEBlock(96) if config.use_se else nn.Identity()
 
-        self.conv_block2 = conv_cls(96, 192)
-        self.se_block2 = SEBlock(192) if config.use_se else nn.Identity()
+            self.conv_block2 = conv_cls(96, 192)
+            self.se_block2 = SEBlock(192) if config.use_se else nn.Identity()
+            lstm_input_size = 192
+        else:
+            self.conv_block1 = nn.Identity()
+            self.se_block1 = nn.Identity()
+            self.conv_block2 = nn.Identity()
+            self.se_block2 = nn.Identity()
+            lstm_input_size = in_channels
 
         self.lstm = nn.LSTM(
-            input_size=192,
+            input_size=lstm_input_size,
             hidden_size=96,
             num_layers=1,
             bidirectional=True,
@@ -101,10 +118,11 @@ class AblationCNNLSTMAttention(nn.Module):
             diff[:, :, 1:] = x[:, :, 1:] - x[:, :, :-1]
             x = torch.cat([x, diff], dim=1)
 
-        x = self.conv_block1(x)
-        x = self.se_block1(x)
-        x = self.conv_block2(x)
-        x = self.se_block2(x)
+        if self.config.use_cnn:
+            x = self.conv_block1(x)
+            x = self.se_block1(x)
+            x = self.conv_block2(x)
+            x = self.se_block2(x)
 
         x = x.permute(0, 2, 1)
         lstm_out, _ = self.lstm(x)

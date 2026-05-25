@@ -81,7 +81,7 @@ pip install -r requirements.txt
 python scripts/train_lstm.py --epochs 100 --batch-size 128
 python scripts/train_cnn_lstm_attn.py --epochs 100 --batch-size 128
 
-# 运行消融实验：full / no_derivative / single_scale / no_se / no_temporal_attention
+# 运行消融实验：LSTM+Attention 与 CNN+LSTM
 python scripts/train_ablation.py --epochs 100 --batch-size 128
 
 # 评估、生成对比指标及混淆矩阵

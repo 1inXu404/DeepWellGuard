@@ -42,6 +42,9 @@ from src.utils.config import (  # noqa: E402
 from src.utils.device import get_device  # noqa: E402
 
 
+DEFAULT_VARIANTS = ["lstm_attention", "cnn_lstm"]
+
+
 def build_loaders(args, use_cuda: bool):
     """Build train/val/test DataLoaders with deterministic sampling."""
     label_map = {orig: new for new, orig in enumerate(RETAINED_CLASSES)}
@@ -174,7 +177,7 @@ def main() -> None:
     parser.add_argument(
         "--variants",
         nargs="+",
-        default=list(ABLATION_CONFIGS.keys()),
+        default=DEFAULT_VARIANTS,
         choices=sorted(ABLATION_CONFIGS.keys()),
         help="Ablation variants to train.",
     )
