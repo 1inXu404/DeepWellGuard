@@ -11,6 +11,15 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt  # noqa: E402
 import numpy as np  # noqa: E402
 
+from src.utils.config import MAPPED_CLASS_NAMES  # noqa: E402
+
+
+def _mapped_class_names(n_classes):
+    return [
+        MAPPED_CLASS_NAMES[i] if i < len(MAPPED_CLASS_NAMES) else f"class{i}"
+        for i in range(n_classes)
+    ]
+
 
 def plot_training_curves(history_dict, model_name, save_path=None):
     """Plot training & validation loss + validation accuracy over epochs.
@@ -72,7 +81,7 @@ def plot_confusion_matrix(y_true, y_pred, save_path=None, class_names=None):
     cm = confusion_matrix(y_true, y_pred, normalize="true")
 
     if class_names is None:
-        class_names = [str(i) for i in range(cm.shape[0])]
+        class_names = _mapped_class_names(cm.shape[0])
 
     fig, ax = plt.subplots(figsize=(8, 6))
     sns.heatmap(
@@ -86,7 +95,6 @@ def plot_confusion_matrix(y_true, y_pred, save_path=None, class_names=None):
     )
     ax.set_xlabel("Predicted")
     ax.set_ylabel("True")
-    ax.set_title("Normalized Confusion Matrix")
 
     if save_path:
         plt.savefig(save_path, dpi=150, bbox_inches="tight")

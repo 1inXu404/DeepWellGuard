@@ -18,6 +18,7 @@ import numpy as np  # noqa: E402
 import pandas as pd  # noqa: E402
 
 from src.train.evaluate import compute_metrics, generate_confusion_matrix  # noqa: E402
+from src.utils.config import MAPPED_CLASS_NAMES  # noqa: E402
 from src.visualize.plots import plot_comparison_bar  # noqa: E402
 
 
@@ -95,7 +96,12 @@ def main():
         results.append(metrics)
 
         fig_name = f"results/figures/confusion_{name.replace(' ', '_').replace('-', '_')}.png"
-        generate_confusion_matrix(y_true, y_pred, save_path=fig_name)
+        generate_confusion_matrix(
+            y_true,
+            y_pred,
+            save_path=fig_name,
+            class_names=MAPPED_CLASS_NAMES,
+        )
 
         print(
             f"{name}: acc={metrics['accuracy']:.4f}, "

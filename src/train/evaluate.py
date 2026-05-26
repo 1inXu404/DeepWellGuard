@@ -5,6 +5,7 @@ classification reports, and saving results to CSV.
 """
 
 import pandas as pd
+from src.utils.config import MAPPED_CLASS_NAMES
 from sklearn.metrics import (
     accuracy_score,
     classification_report,
@@ -16,6 +17,13 @@ from sklearn.metrics import (
     auc,
 )
 from sklearn.preprocessing import label_binarize
+
+
+def _mapped_class_names(n_classes):
+    return [
+        MAPPED_CLASS_NAMES[i] if i < len(MAPPED_CLASS_NAMES) else f"class{i}"
+        for i in range(n_classes)
+    ]
 
 
 def compute_metrics(y_true, y_pred, y_proba=None):
@@ -78,7 +86,7 @@ def generate_confusion_matrix(y_true, y_pred, save_path=None, class_names=None):
 
     n_classes = cm.shape[0]
     if class_names is None:
-        class_names = [str(i) for i in range(n_classes)]
+        class_names = _mapped_class_names(n_classes)
 
     plt.figure(figsize=(8, 6))
     sns.heatmap(
@@ -91,7 +99,6 @@ def generate_confusion_matrix(y_true, y_pred, save_path=None, class_names=None):
     )
     plt.xlabel("Predicted")
     plt.ylabel("True")
-    plt.title("Normalized Confusion Matrix")
 
     if save_path:
         plt.savefig(save_path, dpi=150, bbox_inches="tight")
@@ -122,7 +129,7 @@ def generate_confusion_matrix_counts(y_true, y_pred, save_path=None, class_names
 
     n_classes = cm.shape[0]
     if class_names is None:
-        class_names = [str(i) for i in range(n_classes)]
+        class_names = _mapped_class_names(n_classes)
 
     plt.figure(figsize=(8, 6))
     sns.heatmap(
@@ -135,7 +142,6 @@ def generate_confusion_matrix_counts(y_true, y_pred, save_path=None, class_names
     )
     plt.xlabel("Predicted")
     plt.ylabel("True")
-    plt.title("Confusion Matrix (Counts)")
 
     if save_path:
         plt.savefig(save_path, dpi=150, bbox_inches="tight")
@@ -193,7 +199,7 @@ def generate_roc_curve(y_true, y_proba, save_path=None, class_names=None):
         y_true_bin = y_true_bin.reshape(-1, 1)
 
     if class_names is None:
-        class_names = [str(i) for i in range(n_classes)]
+        class_names = _mapped_class_names(n_classes)
 
     # Compute ROC curve and ROC area for each class
     fpr = dict()

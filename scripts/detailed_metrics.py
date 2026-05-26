@@ -20,6 +20,7 @@ from src.train.evaluate import (  # noqa: E402
     generate_classification_report,
     generate_roc_curve
 )
+from src.utils.config import MAPPED_CLASS_NAMES  # noqa: E402
 
 
 def _resolve_key(data, *candidates):
@@ -46,8 +47,7 @@ def main():
     figures_root.mkdir(parents=True, exist_ok=True)
 
     models_to_evaluate = ["CNN", "Uni-LSTM", "Bi-LSTM", "CNN-LSTM-Attention"]
-    # We will use indices 0 to 6 for the labels as requested by the user.
-    class_names = [str(i) for i in range(7)]
+    class_names = MAPPED_CLASS_NAMES
 
     print("Generating detailed metrics, count-based confusion matrices, and ROC curves...\n")
 
