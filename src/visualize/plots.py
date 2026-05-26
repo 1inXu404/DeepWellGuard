@@ -10,6 +10,7 @@ matplotlib.use("Agg")
 
 import matplotlib.pyplot as plt  # noqa: E402
 import numpy as np  # noqa: E402
+from matplotlib.ticker import MultipleLocator, MaxNLocator  # noqa: E402
 
 from src.utils.config import MAPPED_CLASS_NAMES  # noqa: E402
 
@@ -19,6 +20,14 @@ def _mapped_class_names(n_classes):
         MAPPED_CLASS_NAMES[i] if i < len(MAPPED_CLASS_NAMES) else f"class{i}"
         for i in range(n_classes)
     ]
+
+
+def _set_dense_ticks(axis):
+    axis.set_ylim(0, 1)
+    axis.yaxis.set_major_locator(MultipleLocator(0.1))
+    axis.yaxis.set_minor_locator(MultipleLocator(0.05))
+    axis.grid(True, axis="y", which="major", linestyle="--", linewidth=0.7, alpha=0.35)
+    axis.grid(True, axis="y", which="minor", linestyle=":", linewidth=0.5, alpha=0.22)
 
 
 def plot_training_curves(history_dict, model_name, save_path=None):
@@ -32,30 +41,76 @@ def plot_training_curves(history_dict, model_name, save_path=None):
 
     Creates a dual-axis plot: left y-axis for loss, right y-axis for accuracy.
     """
-    fig, ax1 = plt.subplots(figsize=(10, 5))
+    fig, ax1 = plt.subplots(figsize=(11, 5.8))
 
-    epochs = range(1, len(history_dict["train_loss"]) + 1)
+    train_loss = np.asarray(history_dict["train_loss"], dtype=float)
+    val_loss = np.asarray(history_dict["val_loss"], dtype=float)
+    val_acc = np.asarray(history_dict["val_acc"], dtype=float)
+    n_epochs = min(len(train_loss), len(val_loss), len(val_acc))
+    if n_epochs == 0:
+        raise ValueError("Training history must contain at least one epoch.")
 
-    ax1.plot(epochs, history_dict["train_loss"], "b-", label="Train Loss")
-    ax1.plot(epochs, history_dict["val_loss"], "b--", label="Val Loss")
+    epochs = np.arange(1, n_epochs + 1)
+    train_loss = train_loss[:n_epochs]
+    val_loss = val_loss[:n_epochs]
+    val_acc = val_acc[:n_epochs]
+
+    for values, color, linestyle, label in [
+        (train_loss, "#1f77b4", "-", "Train Loss"),
+        (val_loss, "#4c78a8", "--", "Val Loss"),
+    ]:
+        ax1.plot(
+            epochs,
+            values,
+            marker="o",
+            markersize=3,
+            linestyle=linestyle,
+            linewidth=2.0,
+            color=color,
+            alpha=0.9,
+            label=label,
+        )
     ax1.set_xlabel("Epoch")
-    ax1.set_ylabel("Loss", color="b")
-    ax1.tick_params(axis="y", labelcolor="b")
+    ax1.set_ylabel("Loss", color="#1f77b4")
+    ax1.tick_params(axis="y", labelcolor="#1f77b4")
+    ax1.set_xlim(0.5, 1.5) if n_epochs == 1 else ax1.set_xlim(1, n_epochs)
+    ax1.xaxis.set_major_locator(MaxNLocator(nbins=min(20, n_epochs), integer=True))
+    ax1.xaxis.set_minor_locator(MaxNLocator(nbins=n_epochs, integer=True))
+    _set_dense_ticks(ax1)
 
     ax2 = ax1.twinx()
-    ax2.plot(epochs, history_dict["val_acc"], "r-", label="Val Acc")
-    ax2.set_ylabel("Accuracy", color="r")
-    ax2.tick_params(axis="y", labelcolor="r")
+    ax2.plot(
+        epochs,
+        val_acc,
+        marker="o",
+        markersize=3,
+        linestyle="-",
+        linewidth=2.0,
+        color="#d62728",
+        alpha=0.9,
+        label="Val Acc",
+    )
+    ax2.set_ylabel("Accuracy", color="#d62728")
+    ax2.tick_params(axis="y", labelcolor="#d62728")
+    _set_dense_ticks(ax2)
 
     # Combine legends from both axes
     lines1, labels1 = ax1.get_legend_handles_labels()
     lines2, labels2 = ax2.get_legend_handles_labels()
-    ax1.legend(lines1 + lines2, labels1 + labels2, loc="best")
+    ax1.legend(
+        lines1 + lines2,
+        labels1 + labels2,
+        loc="upper center",
+        bbox_to_anchor=(0.5, -0.13),
+        ncol=3,
+        borderaxespad=0.4,
+    )
 
     plt.title(f"{model_name} Training Curves")
+    fig.tight_layout()
 
     if save_path:
-        plt.savefig(save_path, dpi=150, bbox_inches="tight")
+        plt.savefig(save_path, dpi=200, bbox_inches="tight")
         plt.close()
     else:
         plt.show()

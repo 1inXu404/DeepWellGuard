@@ -23,7 +23,8 @@ env/
 *.swo
 
 # ML Project specific
-results/cache/
+results/*
+!results/README.md
 .sisyphus/
 data/holdout_test/
 

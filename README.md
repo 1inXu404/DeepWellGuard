@@ -31,11 +31,11 @@
 | 纯 Bi-LSTM 基线 | 94.04% | 94.10% | 93.71% |
 | **CNN-LSTM-Attention (改进版)** | **94.94%** | **94.96%** | **95.16%** 🚀 |
 
-<p align="center">
-  <img src="results/figures/comparison_bar.png" width="80%">
-</p>
+> *注：上述结果已排除数据量极少的 2, 7, 8 类别。实验数据切分采用严格的分层随机抽样 (Stratified Random Sampling)，并使用从未参与训练的独立测试集 (Holdout Test Set)。*
 
-> *注：上述结果已排除数据量极少的 2, 7, 8 类别。实验数据切分采用严格的分层随机抽样 (Stratified Random Sampling)，其中 20% 作为从未参与训练的绝对独立测试集 (Holdout Test Set)。*
+训练、评估和可视化产物会输出到 `results/`，包括模型权重、预测文件、训练曲线、ROC 曲线、混淆矩阵、分类报告和汇总表。为避免把大文件与重复生成的实验产物提交到仓库，`results/` 下的训练输出默认被 `.gitignore` 忽略；仅保留 `results/README.md` 作为目录说明。
+
+混淆矩阵显示使用模型映射后的类别序号 `class0` 到 `class6`，对应原始保留类别 `[0, 1, 3, 4, 5, 6, 9]`。生成的混淆矩阵图片不显示标题，便于论文或报告排版。
 
 ---
 
@@ -63,7 +63,7 @@ DeepWellGuard/
 │   │   └── unilstm.py
 │   ├── train/                  # 训练循环控制、早停、AMP、评估计算
 │   └── utils/                  # 全局超参数与配置文件 (config.py)
-├── results/                    # 实验成果存放区 (权重、图表、日志)
+├── results/                    # 本地实验输出区 (默认被 Git 忽略，仅保留 README)
 ├── templates/ & static/        # Web 监控平台 UI 资源
 └── requirements.txt            # 项目依赖
 ```
@@ -73,7 +73,7 @@ DeepWellGuard/
 ## 🚀 快速开始 (Quick Start)
 
 ### 1. 环境安装
-```bash
+```powershell
 git clone https://github.com/YourUsername/DeepWellGuard.git
 cd DeepWellGuard
 pip install -r requirements.txt
@@ -81,7 +81,7 @@ pip install -r requirements.txt
 
 ### 2. 模型训练与评估
 确保你已下载 `3w_dataset_2.0.0` 数据集并放置在根目录下，然后依次运行：
-```bash
+```powershell
 # 训练纯 CNN / 纯单向 LSTM / 纯 Bi-LSTM 基线与改进模型
 python scripts/train_cnn.py --epochs 100 --batch-size 128
 python scripts/train_unilstm.py --epochs 100 --batch-size 128
@@ -95,6 +95,8 @@ python scripts/train_ablation.py --epochs 100 --batch-size 128
 python scripts/compare.py
 python scripts/detailed_metrics.py
 ```
+
+评估脚本会在本地 `results/` 中生成结果文件；这些输出默认不会被 Git 跟踪。如需共享某次实验结果，请手动整理需要保留的表格或图片。
 
 ### Linux 服务器全量实验
 如需先用最小样本验证完整训练链路：
@@ -141,7 +143,7 @@ tail -f run_all.out
 
 ### 3. 启动流式监控大屏
 你可以生成一段包含所有故障连续发生的测试流数据，并通过网页上传监控。
-```bash
+```powershell
 # 生成包含全类别的长序列测试文件 (存至 uploads/demo_test_sequence.parquet)
 python scripts/create_demo_file.py
 
