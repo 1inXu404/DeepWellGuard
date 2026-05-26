@@ -18,18 +18,27 @@ from werkzeug.utils import secure_filename
 
 from src.utils.config import (
     DOWNSAMPLE_RATE,
+    N_FEATURES,
     N_CLASSES as NUM_CLASSES,
     STRIDE as STEP_SIZE,
     RETAINED_CLASSES as TARGET_CLASSES,
     WINDOW_SIZE,
 )
+from src.models.ablation import AblationCNNLSTMAttention, get_ablation_config
+from src.models.bilstm import BiLSTMModel
+from src.models.cnn import CNNModel
 from src.models.cnn_lstm_attention import CNNLSTMAttention
-from src.models.lstm import LSTMModel
+from src.models.unilstm import UniLSTMModel
 from ThreeWToolkit.utils.data_utils import default_data_processing
 
 app = Flask(__name__)
+BASE_DIR = Path(__file__).parent
 app.config['UPLOAD_FOLDER'] = str(Path(__file__).parent / 'uploads')
-app.config['CHECKPOINT_FOLDER'] = str(Path(__file__).parent / 'results' / 'models')
+app.config['CHECKPOINT_ROOTS'] = [
+    str(BASE_DIR / 'results' / 'runs'),
+    str(BASE_DIR / 'results' / 'models'),
+    str(BASE_DIR / 'results' / 'ablation'),
+]
 os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
 
 # 从配置加载
@@ -42,43 +51,175 @@ CLASS_NAMES_CN = {
 }
 CLASS_NAMES = [CLASS_NAMES_CN[c] for c in TARGET_CLASSES]
 
+MODEL_SPECS = {
+    "cnn_lstm_attention": {
+        "name": "CNN-LSTM-Attention 改进模型",
+        "factory": CNNLSTMAttention,
+        "badge": "推荐",
+    },
+    "bilstm": {
+        "name": "Bi-LSTM 基线模型",
+        "factory": BiLSTMModel,
+        "badge": "基线",
+    },
+    "unilstm": {
+        "name": "Uni-LSTM 基线模型",
+        "factory": UniLSTMModel,
+        "badge": "基线",
+    },
+    "cnn": {
+        "name": "CNN 基线模型",
+        "factory": CNNModel,
+        "badge": "基线",
+    },
+    "ablation_cnn_lstm": {
+        "name": "CNN-LSTM 消融模型",
+        "factory": lambda: AblationCNNLSTMAttention(get_ablation_config("cnn_lstm")),
+        "badge": "消融",
+    },
+    "ablation_lstm_channel_attention": {
+        "name": "LSTM-Channel-Attention 消融模型",
+        "factory": lambda: AblationCNNLSTMAttention(
+            get_ablation_config("lstm_channel_attention")
+        ),
+        "badge": "消融",
+    },
+}
+
+
+def infer_model_key(path: Path) -> str | None:
+    """Infer model architecture from a checkpoint path or file name."""
+    text = path.as_posix().lower()
+    parts = [part.lower() for part in path.parts]
+
+    if "cnn_lstm_attention" in text or "cnnlstmattention" in text:
+        return "cnn_lstm_attention"
+    if "lstm_channel_attention" in text:
+        return "ablation_lstm_channel_attention"
+    if "cnn_lstm" in text:
+        return "ablation_cnn_lstm"
+    if "bi_lstm" in text or "bilstm" in text or "bilstmmodel" in text:
+        return "bilstm"
+    if "uni_lstm" in text or "unilstm" in text or "unilstmmodel" in text:
+        return "unilstm"
+    if path.stem.lower() == "lstmmodel":
+        return "unilstm"
+    if "cnnmodel" in text or ("cnn" in parts and "cnn_lstm" not in text):
+        return "cnn"
+    return None
+
+
+def checkpoint_roots() -> list[Path]:
+    return [Path(root).resolve() for root in app.config['CHECKPOINT_ROOTS']]
+
+
+def resolve_checkpoint_path(checkpoint_filename: str) -> Path:
+    """Resolve a selected checkpoint while keeping it inside known roots."""
+    candidates = []
+    raw_path = Path(checkpoint_filename)
+
+    if raw_path.is_absolute():
+        candidates.append(raw_path)
+    else:
+        candidates.append(BASE_DIR / raw_path)
+        for root in checkpoint_roots():
+            candidates.append(root / raw_path)
+
+    roots = checkpoint_roots()
+    for candidate in candidates:
+        path = candidate.resolve()
+        if path.is_file() and any(path.is_relative_to(root) for root in roots):
+            return path
+
+    raise FileNotFoundError(f"找不到权重文件: {checkpoint_filename}")
+
+
+def load_state_dict(path: Path) -> dict:
+    try:
+        checkpoint = torch.load(path, map_location=device, weights_only=True)
+    except TypeError:
+        checkpoint = torch.load(path, map_location=device)
+
+    if isinstance(checkpoint, dict):
+        for key in ("model_state_dict", "state_dict", "model"):
+            if key in checkpoint and isinstance(checkpoint[key], dict):
+                checkpoint = checkpoint[key]
+                break
+
+    if not isinstance(checkpoint, dict):
+        raise ValueError("权重文件格式不受支持")
+
+    return {
+        key.removeprefix("module."): value
+        for key, value in checkpoint.items()
+    }
+
+
+def checkpoint_entry(pt_file: Path) -> dict:
+    model_key = infer_model_key(pt_file)
+    spec = MODEL_SPECS.get(model_key, {})
+    rel_path = pt_file.relative_to(BASE_DIR).as_posix()
+    updated_at = pt_file.stat().st_mtime
+    return {
+        "path": rel_path,
+        "label": f"{spec.get('name', '未知模型')} · {rel_path}",
+        "model_key": model_key or "unknown",
+        "model_name": spec.get("name", "未知模型"),
+        "badge": spec.get("badge", "需确认"),
+        "updated_at": updated_at,
+        "updated_label": time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(updated_at)),
+        "recommended": model_key == "cnn_lstm_attention",
+    }
+
 
 @app.route('/get_checkpoints', methods=['GET'])
 def get_checkpoints():
-    folder = Path(app.config['CHECKPOINT_FOLDER'])
-    if not folder.exists():
-        return json.dumps([])
+    entries = []
+    seen = set()
 
-    files = []
-    # 查找所有的 .pt 权重文件，包括子文件夹
-    for pt_file in folder.rglob("*.pt"):
-        # 存下相对路径，例如 "20260517_115543/cnnlstmattention.pt"
-        rel_path = pt_file.relative_to(folder).as_posix()
-        files.append(rel_path)
+    for root in checkpoint_roots():
+        if not root.exists():
+            continue
+        for pt_file in root.rglob("*.pt"):
+            resolved = pt_file.resolve()
+            if resolved in seen:
+                continue
+            seen.add(resolved)
+            entries.append(checkpoint_entry(resolved))
 
-    files.sort(reverse=True)
-    return json.dumps(files)
+    entries.sort(
+        key=lambda item: (
+            0 if item["recommended"] else 1,
+            -item["updated_at"],
+            item["path"],
+        )
+    )
+    return Response(
+        json.dumps(entries, ensure_ascii=False),
+        mimetype='application/json',
+    )
 
 
 def load_model(checkpoint_filename):
-    weight_path = os.path.join(
-        app.config['CHECKPOINT_FOLDER'],
-        checkpoint_filename)
-    if not os.path.exists(weight_path):
-        raise FileNotFoundError(f"找不到权重文件: {weight_path}")
+    weight_path = resolve_checkpoint_path(checkpoint_filename)
+    model_key = infer_model_key(weight_path)
+    if model_key not in MODEL_SPECS:
+        raise ValueError(
+            "无法识别权重对应的模型结构，请将权重放在 "
+            "results/runs/cnn_lstm_attention、results/runs/bi_lstm、"
+            "results/runs/uni_lstm 或 results/runs/cnn 等目录中"
+        )
 
-    # 获取训练时使用的传感器列 (3W数据集中排除class和state的剩余列，共22个)
-    # 因为 config 里没有 load_feature_columns，我们硬编码或者在此方法中返回 None 让后面处理
-    # 实际上预处理会自动丢弃非信号列，所以不需要返回 feature_columns
-    
-    if "lstmmodel" in checkpoint_filename.lower():
-        model = LSTMModel().to(device)
-    else:
-        model = CNNLSTMAttention().to(device)
-
-    model.load_state_dict(torch.load(weight_path, map_location=device))
+    spec = MODEL_SPECS[model_key]
+    model = spec["factory"]().to(device)
+    model.load_state_dict(load_state_dict(weight_path))
     model.eval()
-    return model, None
+    return model, {
+        "checkpoint": weight_path.relative_to(BASE_DIR).as_posix(),
+        "model_key": model_key,
+        "model_name": spec["name"],
+        "device": str(device),
+    }
 
 
 @app.route('/')
@@ -115,7 +256,7 @@ def predict_stream():
                 "content": "正在加载模型与权重...",
             }) + "\n"
             try:
-                model, _ = load_model(checkpoint_file)
+                model, model_meta = load_model(checkpoint_file)
             except Exception as e:
                 yield json.dumps({
                     "type": "error",
@@ -157,6 +298,16 @@ def predict_stream():
 
             # 提取可用特征列 (去除非信号列)
             available_cols = [c for c in signals.columns if c not in ("class", "state")]
+            if len(available_cols) != N_FEATURES:
+                yield json.dumps({
+                    "type": "error",
+                    "content": (
+                        f"特征列数量不匹配: 当前 {len(available_cols)} 列，"
+                        f"模型需要 {N_FEATURES} 列"
+                    ),
+                }, ensure_ascii=False) + "\n"
+                return
+
             display_values = {col: signals[col].fillna(
                 0).tolist() for col in available_cols}
             data_np = signals[available_cols].values.astype(np.float32)
@@ -176,7 +327,7 @@ def predict_stream():
                 }) + "\n"
                 return
 
-            X_tensor = torch.tensor(X_windows, dtype=torch.float32)
+            X_tensor = torch.from_numpy(np.asarray(X_windows, dtype=np.float32))
             # 转置以匹配 CNNLSTMAttention 模型输入维度 (batch, channels, length) = (batch, 22, 120)
             X_tensor = X_tensor.permute(0, 2, 1)
 
@@ -185,7 +336,8 @@ def predict_stream():
                 "total_windows": len(X_windows),
                 "total_points": len(data_np),
                 "class_names": CLASS_NAMES,
-                "sensor_cols": available_cols
+                "sensor_cols": available_cols,
+                "model": model_meta,
             }) + "\n"
 
             states = np.zeros(len(data_np), dtype=int)

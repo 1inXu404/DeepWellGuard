@@ -2,6 +2,7 @@
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>3W 油井异常检测系统</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/css/materialize.min.css">
     <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
@@ -31,6 +32,10 @@
                             <i class="material-icons indigo-text">refresh</i>
                         </a>
                     </div>
+                    <div id="model-summary" class="model-summary">
+                        <div class="model-summary-title">等待模型列表</div>
+                        <div class="model-summary-meta">刷新后将自动优先选择最新改进模型</div>
+                    </div>
                     <div class="file-field input-field" style="margin-top: 30px;">
                         <div class="btn indigo">
                             <span>选择数据文件</span>
@@ -45,6 +50,15 @@
                             开始实时推理
                             <i class="material-icons right">timeline</i>
                         </button>
+                    </div>
+                    <div class="progress-card">
+                        <div class="progress-label">
+                            <span id="progress-title">推理进度</span>
+                            <span id="progress-percent">0%</span>
+                        </div>
+                        <div class="progress">
+                            <div id="inference-progress" class="determinate" style="width: 0%"></div>
+                        </div>
                     </div>
                 </form>
             </div>
@@ -90,6 +104,62 @@
     let currentDataIndex = 0;
     let totalWindows = 0;
     let pendingUpdate = false;
+    let checkpointEntries = [];
+    const predictBtn = document.getElementById('predict-btn');
+    const progressBar = document.getElementById('inference-progress');
+    const progressPercent = document.getElementById('progress-percent');
+    const modelSummary = document.getElementById('model-summary');
+
+    function normalizeCheckpoint(item) {
+        if (typeof item === 'string') {
+            return {
+                path: item,
+                label: item,
+                model_name: item.toLowerCase().includes('cnn') ? 'CNN-LSTM-Attention 改进模型' : '模型权重',
+                badge: '兼容',
+                updated_label: '-',
+                recommended: item.toLowerCase().includes('cnn')
+            };
+        }
+        return item;
+    }
+
+    function selectedCheckpoint() {
+        const selectEl = document.getElementById('checkpoint_file');
+        return checkpointEntries.find(item => item.path === selectEl.value);
+    }
+
+    function renderModelSummary(entry) {
+        if (!entry) {
+            modelSummary.innerHTML = `
+                <div class="model-summary-title">未选择模型</div>
+                <div class="model-summary-meta">请先刷新并选择一个 .pt 权重</div>
+            `;
+            return;
+        }
+
+        const recommended = entry.recommended ? '<span class="model-pill">最新改进模型</span>' : '';
+        modelSummary.innerHTML = `
+            <div class="model-summary-title">
+                ${entry.model_name || '模型权重'} ${recommended}
+            </div>
+            <div class="model-summary-meta">${entry.path}</div>
+            <div class="model-summary-meta">更新时间: ${entry.updated_label || '-'}</div>
+        `;
+    }
+
+    function setProgress(current, total) {
+        const percent = total > 0 ? Math.min(100, Math.round((current / total) * 100)) : 0;
+        progressBar.style.width = `${percent}%`;
+        progressPercent.innerText = `${percent}%`;
+    }
+
+    function setRunning(isRunning) {
+        predictBtn.disabled = isRunning;
+        predictBtn.innerHTML = isRunning
+            ? '推理中...<i class="material-icons right">hourglass_top</i>'
+            : '开始实时推理<i class="material-icons right">timeline</i>';
+    }
 
     async function loadCheckpoints(isRefresh = false) {
         const selectEl = document.getElementById('checkpoint_file');
@@ -100,17 +170,21 @@
         try {
             const response = await fetch('/get_checkpoints');
             const files = await response.json();
+            checkpointEntries = files.map(normalizeCheckpoint);
             selectEl.innerHTML = '';
-            if (files.length === 0) {
+            if (checkpointEntries.length === 0) {
                 const opt = document.createElement('option');
                 opt.value = ""; opt.textContent = "未找到权重文件";
                 opt.disabled = true; opt.selected = true; selectEl.appendChild(opt);
+                renderModelSummary(null);
             } else {
-                files.forEach((file, index) => {
+                checkpointEntries.forEach((entry, index) => {
                     const opt = document.createElement('option');
-                    opt.value = file; opt.textContent = file;
+                    opt.value = entry.path;
+                    opt.textContent = `${entry.recommended ? '★ ' : ''}${entry.model_name || '模型'} · ${entry.path}`;
                     if(index === 0) opt.selected = true; selectEl.appendChild(opt);
                 });
+                renderModelSummary(checkpointEntries[0]);
             }
             M.FormSelect.init(selectEl);
             if (isRefresh) M.toast({html: '权重列表已刷新', classes: 'green rounded'});
@@ -134,6 +208,10 @@
         await loadCheckpoints(true);
     });
 
+    document.getElementById('checkpoint_file').addEventListener('change', () => {
+        renderModelSummary(selectedCheckpoint());
+    });
+
     document.getElementById('upload-form').addEventListener('submit', async (e) => {
         e.preventDefault();
         const fileInput = document.getElementById('file');
@@ -142,19 +220,21 @@
         if (!selectEl.value) return M.toast({html: '请选择模型权重', classes: 'red rounded'});
         if (fileInput.files.length === 0) return M.toast({html: '请选择数据文件', classes: 'red rounded'});
 
+        setProgress(0, 1);
         document.getElementById('prob-panel').style.display = 'none';
         document.getElementById('real-time-status').style.backgroundColor = '#9e9e9e';
         document.getElementById('current-state-name').innerText = '正在连接推理引擎...';
         document.getElementById('current-timestep').innerText = '当前处理进度: -';
         document.getElementById('overall-status').style.backgroundColor = '#9e9e9e';
         document.getElementById('overall-state-name').innerText = '全局总览: 正在推理...';
-        document.getElementById('predict-btn').disabled = true;
+        setRunning(true);
         myChart.clear();
 
         const formData = new FormData(e.target);
 
         try {
             const response = await fetch('/predict_stream', { method: 'POST', body: formData });
+            if (!response.ok || !response.body) throw new Error('推理接口不可用');
             const reader = response.body.getReader();
             const decoder = new TextDecoder('utf-8');
             let buffer = '';
@@ -179,7 +259,7 @@
             }
         } catch (error) {
             M.toast({html: '网络发生异常或连接中断', classes: 'red rounded'});
-            document.getElementById('predict-btn').disabled = false;
+            setRunning(false);
         }
     });
 
@@ -193,7 +273,7 @@
             document.getElementById('current-state-name').innerText = '推理失败';
             document.getElementById('overall-status').style.backgroundColor = '#f44336';
             document.getElementById('overall-state-name').innerText = '全局总览: ' + data.content;
-            document.getElementById('predict-btn').disabled = false;
+            setRunning(false);
         }
         else if (data.type === 'init') {
             document.getElementById('prob-panel').style.display = 'block';
@@ -201,6 +281,10 @@
             totalWindows = data.total_windows;
             classNames = data.class_names;
             sensorCols = data.sensor_cols;
+            setProgress(0, totalWindows);
+            if (data.model) {
+                document.getElementById('current-state-name').innerText = `已加载: ${data.model.model_name}`;
+            }
 
             currentDataIndex = 0;
             seriesData = {};
@@ -273,6 +357,7 @@
             }
 
             updateRealTimeUI(data.state_idx, data.probs, data.win_idx + 1, totalWindows);
+            setProgress(data.win_idx + 1, totalWindows);
 
             if (!pendingUpdate) {
                 pendingUpdate = true;
@@ -285,7 +370,8 @@
             }
         }
         else if (data.type === 'done') {
-            document.getElementById('predict-btn').disabled = false;
+            setRunning(false);
+            setProgress(totalWindows, totalWindows);
             const overallBox = document.getElementById('overall-status');
             const overallText = document.getElementById('overall-state-name');
             overallText.innerText = data.status;
