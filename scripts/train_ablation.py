@@ -18,7 +18,7 @@ from datetime import datetime
 import numpy as np
 import pandas as pd
 import torch
-from torch.utils.data import DataLoader, Subset, WeightedRandomSampler
+from torch.utils.data import DataLoader, Subset
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -29,6 +29,7 @@ from src.models.ablation import (  # noqa: E402
     get_ablation_config,
 )
 from src.train.evaluate import compute_metrics  # noqa: E402
+from src.train.sampling import make_sqrt_balanced_sampler  # noqa: E402
 from src.train.trainer import Trainer  # noqa: E402
 from src.visualize.plots import plot_comparison_bar, plot_training_curves  # noqa: E402
 from src.utils.config import (  # noqa: E402
@@ -66,19 +67,11 @@ def build_loaders(args, use_cuda: bool):
     val_ds.labels = np.array([label_map[lbl] for lbl in val_ds.labels])
     test_ds.labels = np.array([label_map[lbl] for lbl in test_ds.labels])
 
-    train_labels = train_ds.labels
-    class_counts = np.bincount(train_labels, minlength=7)
-    class_counts = np.where(class_counts == 0, 1, class_counts)
-    sample_weights = 1.0 / np.sqrt(class_counts[train_labels])
     num_train_samples = int(len(train_ds) * args.subset)
-
-    sampler_generator = torch.Generator()
-    sampler_generator.manual_seed(args.seed)
-    sampler = WeightedRandomSampler(
-        sample_weights,
-        num_train_samples,
-        replacement=True,
-        generator=sampler_generator,
+    train_sampler = make_sqrt_balanced_sampler(
+        train_ds,
+        num_samples=num_train_samples,
+        seed=args.seed,
     )
 
     if args.subset < 1.0:
@@ -88,18 +81,19 @@ def build_loaders(args, use_cuda: bool):
             replace=False,
         )
         val_ds = Subset(val_ds, val_indices)
+    val_sampler = make_sqrt_balanced_sampler(val_ds, seed=args.seed)
 
     train_loader = DataLoader(
         train_ds,
         batch_size=args.batch_size,
-        sampler=sampler,
+        sampler=train_sampler,
         pin_memory=use_cuda,
         num_workers=0,
     )
     val_loader = DataLoader(
         val_ds,
         batch_size=args.batch_size,
-        shuffle=False,
+        sampler=val_sampler,
         pin_memory=use_cuda,
         num_workers=0,
     )
