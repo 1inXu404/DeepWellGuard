@@ -46,7 +46,7 @@ logs/
 *.log
 
 # Local one-off server scripts
-scripts/run_all_experiments_shutdown.sh
+scripts/run_all_experiments.sh
 
 # Jupyter
 .ipynb_checkpoints/
