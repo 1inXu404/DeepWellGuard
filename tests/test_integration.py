@@ -7,6 +7,8 @@ import pytest
 import torch
 from torch.utils.data import DataLoader, TensorDataset
 
+from src.utils.config import N_FEATURES, WINDOW_SIZE
+
 
 class TestTrainerIntegration:
     """Integration tests for the Trainer class (fit, early stopping, predict)."""
@@ -20,7 +22,7 @@ class TestTrainerIntegration:
         device = get_device()
         model = BiLSTMModel().to(device)
 
-        x = torch.randn(200, 22, 120)
+        x = torch.randn(200, N_FEATURES, WINDOW_SIZE)
         y = torch.randint(0, 7, (200,))
         train_ds = TensorDataset(x[:150], y[:150])
         val_ds = TensorDataset(x[150:], y[150:])
@@ -46,9 +48,9 @@ class TestTrainerIntegration:
         model = BiLSTMModel().to(device)
 
         # Use independent train/val sets so the model cannot memorise both.
-        x_train = torch.randn(200, 22, 120)
+        x_train = torch.randn(200, N_FEATURES, WINDOW_SIZE)
         y_train = torch.randint(0, 7, (200,))
-        x_val = torch.randn(50, 22, 120)
+        x_val = torch.randn(50, N_FEATURES, WINDOW_SIZE)
         y_val = torch.randint(0, 7, (50,))
 
         train_loader = DataLoader(TensorDataset(x_train, y_train), 16)
@@ -73,7 +75,7 @@ class TestTrainerIntegration:
         device = get_device()
         model = BiLSTMModel().to(device)
 
-        x = torch.randn(50, 22, 120)
+        x = torch.randn(50, N_FEATURES, WINDOW_SIZE)
         y = torch.randint(0, 7, (50,))
         ds = TensorDataset(x, y)
         loader = DataLoader(ds, 16)

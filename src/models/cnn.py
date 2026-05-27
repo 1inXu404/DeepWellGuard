@@ -1,7 +1,7 @@
 """Pure CNN baseline for oil well event classification.
 
 The model keeps the same contract as the rest of the project:
-input ``(batch, 22, 120)`` and output ``(batch, 7)`` logits.
+input ``(batch, N_FEATURES, 120)`` and output ``(batch, 7)`` logits.
 """
 
 import torch
@@ -45,7 +45,7 @@ class CNNModel(nn.Module):
         )
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        """Return logits for input shaped ``(batch, 22, 120)``."""
+        """Return logits for input shaped ``(batch, N_FEATURES, 120)``."""
         x = self.feature_extractor(x)
         x = self.global_pool(x).squeeze(-1)
         return self.classifier(x)

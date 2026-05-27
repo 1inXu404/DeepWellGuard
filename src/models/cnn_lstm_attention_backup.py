@@ -1,6 +1,6 @@
 """CNN-LSTM-Attention hybrid model for oil well event detection.
 
-Input:  (batch, 22 sensors, 120 time steps)
+Input:  (batch, selected sensors, 120 time steps)
 Output: (batch, 7) logits for 7 event classes.
 
 Architecture: CNN feature extractor → LSTM temporal encoder →
@@ -11,15 +11,17 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
+from src.utils.config import N_CLASSES, N_FEATURES
+
 
 class CNNLSTMAttention(nn.Module):
     """CNN-LSTM-Attention hybrid model for time series classification.
 
     Architecture:
-        Input:  (batch, 22, 120)
+        Input:  (batch, N_FEATURES, 120)
 
         CNN Feature Extractor (2 blocks):
-        Block1: Conv1d(22→64, k=3, p=1) → BatchNorm1d → ReLU → MaxPool1d(2)
+        Block1: Conv1d(N_FEATURES→64, k=3, p=1) → BatchNorm1d → ReLU → MaxPool1d(2)
                 (batch, 64, 60)
         Block2: Conv1d(64→128, k=3, p=1) → BatchNorm1d → ReLU → MaxPool1d(2)
                 (batch, 128, 30)
@@ -46,7 +48,7 @@ class CNNLSTMAttention(nn.Module):
 
         # CNN feature extractor — Block 1
         self.block1 = nn.Sequential(
-            nn.Conv1d(22, 64, kernel_size=3, padding=1),
+            nn.Conv1d(N_FEATURES, 64, kernel_size=3, padding=1),
             nn.BatchNorm1d(64),
             nn.ReLU(),
             nn.MaxPool1d(kernel_size=2),
@@ -84,14 +86,14 @@ class CNNLSTMAttention(nn.Module):
             nn.BatchNorm1d(64),
             nn.ReLU(),
             nn.Dropout(0.4),
-            nn.Linear(64, 7),
+            nn.Linear(64, N_CLASSES),
         )
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """Forward pass, returns raw logits.
 
         Args:
-            x: Input tensor of shape (batch, 22, 120).
+            x: Input tensor of shape (batch, N_FEATURES, 120).
 
         Returns:
             Logits tensor of shape (batch, 7).
@@ -123,7 +125,7 @@ class CNNLSTMAttention(nn.Module):
         """Return class predictions (indices).
 
         Args:
-            x: Input tensor of shape (batch, 22, 120).
+            x: Input tensor of shape (batch, N_FEATURES, 120).
 
         Returns:
             LongTensor of shape (batch,) with predicted class indices.
@@ -135,7 +137,7 @@ class CNNLSTMAttention(nn.Module):
         """Return softmax probabilities.
 
         Args:
-            x: Input tensor of shape (batch, 22, 120).
+            x: Input tensor of shape (batch, N_FEATURES, 120).
 
         Returns:
             Tensor of shape (batch, 7) with class probabilities.

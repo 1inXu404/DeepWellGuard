@@ -13,6 +13,7 @@ from src.data.loader import (
     stratified_holdout_split,
 )
 from src.data.preprocessor import preprocess_single_file
+from src.utils.config import N_FEATURES, WINDOW_SIZE
 
 
 class TestDataLoader:
@@ -78,13 +79,13 @@ class TestPreprocessor:
     """Tests for preprocess_single_file."""
 
     def test_output_shape(self):
-        """Preprocessed features must be 3-D with trailing dims (22, 120)."""
+        """Preprocessed features must be 3-D with configured trailing dims."""
         files = sorted(glob.glob("3w_dataset_2.0.0/5/SIMULATED_*.parquet"))
         if not files:
             pytest.skip("No SIMULATED parquet files found for class 5")
         X, y = preprocess_single_file(files[0])
         assert X.ndim == 3
-        assert X.shape[1:] == (22, 120)
+        assert X.shape[1:] == (N_FEATURES, WINDOW_SIZE)
 
     def test_no_nan(self):
         """No NaN values should survive preprocessing."""

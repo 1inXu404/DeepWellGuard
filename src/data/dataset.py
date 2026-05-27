@@ -11,6 +11,8 @@ import numpy as np
 import torch
 from torch.utils.data import Dataset
 
+from src.utils.config import N_FEATURES, WINDOW_SIZE
+
 
 class OilWellDataset(Dataset):
     """PyTorch Dataset backed by preprocessed NumPy cache files.
@@ -18,10 +20,10 @@ class OilWellDataset(Dataset):
     Expected input files (created by the preprocessing stage)::
 
         data/processed/train/
-            X_train.npy    – shape (N_train, 22, 120), float32
+            X_train.npy    – shape (N_train, n_features, 120), float32
             y_train.npy    – shape (N_train,),           int64
         data/processed/test/
-            X_test.npy     – shape (N_test, 22, 120),  float32
+            X_test.npy     – shape (N_test, n_features, 120),  float32
             y_test.npy     – shape (N_test,),            int64
 
     Each call to ``__getitem__`` returns an ``(x, y)`` tuple of PyTorch
@@ -47,13 +49,21 @@ class OilWellDataset(Dataset):
         if not labels_path.exists():
             raise FileNotFoundError(f"Labels file not found: {labels_path}")
 
-        self.features: np.ndarray = np.load(str(features_path), mmap_mode='r')  # (N, 22, 120)
+        self.features: np.ndarray = np.load(str(features_path), mmap_mode='r')
         self.labels: np.ndarray = np.load(str(labels_path), mmap_mode='r')  # (N,)
 
         if len(self.features) != len(self.labels):
             raise ValueError(
                 f"Feature/label length mismatch: "
                 f"{len(self.features)} vs {len(self.labels)}"
+            )
+        expected_shape = (N_FEATURES, WINDOW_SIZE)
+        if self.features.ndim != 3 or self.features.shape[1:] != expected_shape:
+            raise ValueError(
+                f"Feature shape mismatch in {features_path}: got "
+                f"{self.features.shape}, expected (N, {N_FEATURES}, {WINDOW_SIZE}). "
+                "Run scripts/preprocess.py to regenerate caches for the current "
+                "sensor selection."
             )
 
     def __len__(self) -> int:
@@ -66,7 +76,7 @@ class OilWellDataset(Dataset):
 
     @property
     def n_features(self) -> int:
-        """Number of sensor channels (22)."""
+        """Number of selected sensor channels."""
         return self.features.shape[1]
 
     @property

@@ -22,7 +22,14 @@ from src.data.loader import (  # noqa: E402
     stratified_holdout_split,
 )
 from src.data.preprocessor import preprocess_single_file, save_preprocessed  # noqa: E402
-from src.utils.config import HOLDOUT_RATIO, MAX_FILES_PER_CLASS, SEED, VAL_RATIO  # noqa: E402
+from src.utils.config import (  # noqa: E402
+    HOLDOUT_RATIO,
+    MAX_FILES_PER_CLASS,
+    N_FEATURES,
+    SEED,
+    VAL_RATIO,
+    WINDOW_SIZE,
+)
 
 
 def main():
@@ -93,7 +100,8 @@ def main():
             X_out = np.concatenate(X_list, axis=0)
             y_out = np.concatenate(y_list, axis=0)
         else:
-            X_out, y_out = np.empty((0, 22, 120)), np.empty((0,))
+            X_out = np.empty((0, N_FEATURES, WINDOW_SIZE), dtype=np.float32)
+            y_out = np.empty((0,), dtype=np.int64)
 
         return X_out, y_out, skipped
 

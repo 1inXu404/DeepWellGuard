@@ -10,6 +10,7 @@ from src.models.bilstm import BiLSTMModel
 from src.models.cnn_lstm_attention import ChannelAttention1d, CNNLSTMAttention
 from src.models.unilstm import UniLSTMModel
 from src.models.ablation import ABLATION_CONFIGS, AblationCNNLSTMAttention
+from src.utils.config import N_FEATURES, WINDOW_SIZE
 
 
 # ---------------------------------------------------------------------------
@@ -25,7 +26,7 @@ def _overfit_single_batch(model: nn.Module, lr: float = 0.01,
     model.train()
     opt = torch.optim.Adam(model.parameters(), lr=lr)
     criterion = nn.CrossEntropyLoss()
-    x = torch.randn(8, 22, 120)
+    x = torch.randn(8, N_FEATURES, WINDOW_SIZE)
     y = torch.randint(0, 7, (8,))
     losses: list[float] = []
     for _ in range(steps):
@@ -39,13 +40,13 @@ def _overfit_single_batch(model: nn.Module, lr: float = 0.01,
 
 def _forward_shape_test(model: nn.Module):
     """Verify forward pass produces (batch, 7)."""
-    out = model(torch.randn(4, 22, 120))
+    out = model(torch.randn(4, N_FEATURES, WINDOW_SIZE))
     assert out.shape == (4, 7), f"Expected (4, 7), got {out.shape}"
 
 
 def _predict_test(model: nn.Module):
     """Verify predict returns valid class indices."""
-    preds = model.predict(torch.randn(4, 22, 120))
+    preds = model.predict(torch.randn(4, N_FEATURES, WINDOW_SIZE))
     assert preds.shape == (4,), f"Expected (4,), got {preds.shape}"
     assert all(0 <= x < 7 for x in preds), f"Predictions out of range: {preds}"
 
@@ -58,7 +59,7 @@ def _save_load_test(model: nn.Module):
         model_cls = type(model)
         loaded = model_cls()
         loaded.load_state_dict(torch.load(path, weights_only=True))
-        x = torch.randn(4, 22, 120)
+        x = torch.randn(4, N_FEATURES, WINDOW_SIZE)
         # Switch to eval mode so Dropout/BatchNorm behave deterministically
         model.eval()
         loaded.eval()

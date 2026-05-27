@@ -10,8 +10,26 @@ OVERLAP = 0.5  # 50% overlap between windows
 STRIDE = 60  # Effective stride = int(WINDOW_SIZE * (1 - OVERLAP))
 DOWNSAMPLE_RATE = 2  # Downsample raw data by taking every 2nd row
 
+# Sensor selection
+# Use only valve opening, pressure, and temperature sensors. Valve state sensors
+# (ESTADO-*) and flow-only tags such as QGL are intentionally excluded.
+SELECTED_SENSOR_COLUMNS = [
+    "ABER-CKGL",
+    "ABER-CKP",
+    "P-ANULAR",
+    "P-JUS-CKGL",
+    "P-JUS-CKP",
+    "P-MON-CKP",
+    "P-PDG",
+    "P-TPT",
+    "T-JUS-CKP",
+    "T-MON-CKP",
+    "T-PDG",
+    "T-TPT",
+]
+
 # Data info
-N_FEATURES = 22  # After removing UNUSED_TAGS from 27 sensors
+N_FEATURES = len(SELECTED_SENSOR_COLUMNS)
 N_CLASSES = 7  # Classes 0,1,3,4,5,6,9 (excluded 2,7,8)
 EXCLUDED_CLASSES = [2, 7, 8]
 RETAINED_CLASSES = [0, 1, 3, 4, 5, 6, 9]

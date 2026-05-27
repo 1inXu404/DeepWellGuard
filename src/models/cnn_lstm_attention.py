@@ -1,6 +1,6 @@
 """CNN-LSTM-Channel-Attention hybrid model for oil well event detection.
 
-Input:  (batch, 22 sensors, 120 time steps)
+Input:  (batch, selected sensors, 120 time steps)
 Output: (batch, 7) logits for 7 event classes.
 
 Architecture:
@@ -15,6 +15,8 @@ Architecture:
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+
+from src.utils.config import N_CLASSES, N_FEATURES
 
 
 class ChannelAttention1d(nn.Module):
@@ -79,8 +81,7 @@ class CNNLSTMAttention(nn.Module):
     def __init__(self):
         super().__init__()
 
-        # We concatenate original input (22) with its 1st derivative (22) -> 44 channels
-        in_channels = 44
+        in_channels = N_FEATURES * 2
 
         # CNN Part: Block 1
         self.ms_block1 = MultiScaleConv1d(in_channels, 96)
@@ -106,14 +107,14 @@ class CNNLSTMAttention(nn.Module):
             nn.BatchNorm1d(64),
             nn.ReLU(),
             nn.Dropout(0.4),
-            nn.Linear(64, 7),
+            nn.Linear(64, N_CLASSES),
         )
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """Forward pass, returns raw logits.
 
         Args:
-            x: Input tensor of shape (batch, 22, 120).
+            x: Input tensor of shape (batch, N_FEATURES, 120).
 
         Returns:
             Logits tensor of shape (batch, 7).
@@ -121,7 +122,7 @@ class CNNLSTMAttention(nn.Module):
         # Step 0: Calculate 1st derivative (rate of change)
         diff = torch.zeros_like(x)
         diff[:, :, 1:] = x[:, :, 1:] - x[:, :, :-1]
-        x = torch.cat([x, diff], dim=1)  # (batch, 44, 120)
+        x = torch.cat([x, diff], dim=1)
 
         # Step 1: Multi-scale CNN
         x = self.ms_block1(x)  # (batch, 96, 60)

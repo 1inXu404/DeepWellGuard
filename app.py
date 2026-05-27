@@ -20,6 +20,7 @@ from src.utils.config import (
     DOWNSAMPLE_RATE,
     N_FEATURES,
     N_CLASSES as NUM_CLASSES,
+    SELECTED_SENSOR_COLUMNS,
     STRIDE as STEP_SIZE,
     RETAINED_CLASSES as TARGET_CLASSES,
     WINDOW_SIZE,
@@ -296,14 +297,21 @@ def predict_stream():
             )
             signals = data["signal"]
 
-            # 提取可用特征列 (去除非信号列)
-            available_cols = [c for c in signals.columns if c not in ("class", "state")]
+            # 提取模型使用的特征列，保持与离线预处理相同的顺序。
+            available_cols = [
+                col for col in SELECTED_SENSOR_COLUMNS
+                if col in signals.columns
+            ]
             if len(available_cols) != N_FEATURES:
+                missing_cols = [
+                    col for col in SELECTED_SENSOR_COLUMNS
+                    if col not in signals.columns
+                ]
                 yield json.dumps({
                     "type": "error",
                     "content": (
                         f"特征列数量不匹配: 当前 {len(available_cols)} 列，"
-                        f"模型需要 {N_FEATURES} 列"
+                        f"模型需要 {N_FEATURES} 列；缺失列: {missing_cols}"
                     ),
                 }, ensure_ascii=False) + "\n"
                 return
@@ -328,7 +336,7 @@ def predict_stream():
                 return
 
             X_tensor = torch.from_numpy(np.asarray(X_windows, dtype=np.float32))
-            # 转置以匹配 CNNLSTMAttention 模型输入维度 (batch, channels, length) = (batch, 22, 120)
+            # 转置以匹配模型输入维度 (batch, channels, length)
             X_tensor = X_tensor.permute(0, 2, 1)
 
             yield json.dumps({

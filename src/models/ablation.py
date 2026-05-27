@@ -1,7 +1,7 @@
 """Ablation variants for the CNN-LSTM-Channel-Attention model.
 
 The variants keep the same input/output contract as the main model:
-input ``(batch, 22, 120)`` and output ``(batch, 7)`` logits.
+input ``(batch, N_FEATURES, 120)`` and output ``(batch, 7)`` logits.
 """
 
 from dataclasses import dataclass
@@ -11,6 +11,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 from src.models.cnn_lstm_attention import ChannelAttention1d, MultiScaleConv1d
+from src.utils.config import N_CLASSES, N_FEATURES
 
 
 @dataclass(frozen=True)
@@ -65,7 +66,7 @@ class AblationCNNLSTMAttention(nn.Module):
         super().__init__()
         self.config = config
 
-        in_channels = 44 if config.use_derivative else 22
+        in_channels = N_FEATURES * 2 if config.use_derivative else N_FEATURES
         conv_cls = MultiScaleConv1d if config.use_multiscale else SingleScaleConv1d
 
         if config.use_cnn:
@@ -93,7 +94,7 @@ class AblationCNNLSTMAttention(nn.Module):
             nn.BatchNorm1d(64),
             nn.ReLU(),
             nn.Dropout(0.4),
-            nn.Linear(64, 7),
+            nn.Linear(64, N_CLASSES),
         )
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:

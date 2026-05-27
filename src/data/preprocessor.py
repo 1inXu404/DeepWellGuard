@@ -1,9 +1,10 @@
 """Data preprocessing pipeline for the 3W oil well dataset.
 
-Loads raw Parquet files, applies cleanup + Z-score normalization + label
-handling via ThreeWToolkit, windows the time series (window_size=120,
-overlap=0.5), aggregates per-window labels via mode, and reshapes into
-the (n_windows, 22, 120) tensor format required by the CNN/LSTM models.
+Loads raw Parquet files, keeps valve opening, pressure, and temperature
+sensors, applies cleanup + Z-score normalization + label handling via
+ThreeWToolkit, windows the time series (window_size=120, overlap=0.5),
+aggregates per-window labels via mode, and reshapes into the
+(n_windows, n_features, 120) tensor format required by the CNN/LSTM models.
 
 Cache support: preprocessed arrays can be saved to and loaded from
 ``results/cache/`` as compressed ``.npy`` files.
@@ -20,7 +21,13 @@ from scipy.stats import mode as scipy_mode
 from ThreeWToolkit.preprocessing import Windowing, WindowingConfig
 from ThreeWToolkit.utils.data_utils import default_data_processing
 
-from src.utils.config import OVERLAP, WINDOW_SIZE, DOWNSAMPLE_RATE
+from src.utils.config import (
+    DOWNSAMPLE_RATE,
+    N_FEATURES,
+    OVERLAP,
+    SELECTED_SENSOR_COLUMNS,
+    WINDOW_SIZE,
+)
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -46,8 +53,8 @@ def preprocess_single_file(file_path: str) -> Tuple[np.ndarray, np.ndarray]:
        pad_last_window=True, boxcar window) to both signals and labels.
     5. For each label window take the **mode** (most frequent class) as the
        window-level label.
-    6. Reshape the flat signal windows from ``(n_windows, 22*120)`` into
-       ``(n_windows, 22, 120)``.
+    6. Keep only ``SELECTED_SENSOR_COLUMNS`` and reshape the flat signal
+       windows into ``(n_windows, N_FEATURES, 120)``.
 
     Parameters
     ----------
@@ -57,7 +64,7 @@ def preprocess_single_file(file_path: str) -> Tuple[np.ndarray, np.ndarray]:
     Returns
     -------
     X : np.ndarray
-        Float32 array of shape ``(n_windows, 22, 120)``.
+        Float32 array of shape ``(n_windows, N_FEATURES, 120)``.
     y : np.ndarray
         Int64 array of shape ``(n_windows,)`` — per-window class labels.
 
@@ -94,7 +101,7 @@ def preprocess_single_file(file_path: str) -> Tuple[np.ndarray, np.ndarray]:
             f"(minimum {MIN_FILE_LENGTH} required)."
         )
         return (
-            np.empty((0, 22, WINDOW_SIZE), dtype=np.float32),
+            np.empty((0, N_FEATURES, WINDOW_SIZE), dtype=np.float32),
             np.empty((0,), dtype=np.int64),
         )
 
@@ -105,8 +112,15 @@ def preprocess_single_file(file_path: str) -> Tuple[np.ndarray, np.ndarray]:
         target_column="class",
         fill_target_value=0,
     )
-    signal_clean: pd.DataFrame = processed["signal"]   # (T, 22)
+    signal_clean: pd.DataFrame = processed["signal"]
     label_clean: pd.DataFrame = processed["label"]     # (T, 1) — 'class'
+    missing_cols = [
+        col for col in SELECTED_SENSOR_COLUMNS
+        if col not in signal_clean.columns
+    ]
+    if missing_cols:
+        raise ValueError(f"Missing selected sensor columns: {missing_cols}")
+    signal_clean = signal_clean[SELECTED_SENSOR_COLUMNS].copy()
 
     # ── 4. Windowing ─────────────────────────────────────────────────────
     windowing = Windowing(
@@ -119,7 +133,7 @@ def preprocess_single_file(file_path: str) -> Tuple[np.ndarray, np.ndarray]:
         )
     )
 
-    windows_df = windowing(signal_clean)          # (n_windows, 22*120 + 1)
+    windows_df = windowing(signal_clean)
     label_windows_df = windowing(label_clean)     # (n_windows, 120 + 1)
 
     # ── 5. Label aggregation (mode) ─────────────────────────────────────
@@ -134,14 +148,14 @@ def preprocess_single_file(file_path: str) -> Tuple[np.ndarray, np.ndarray]:
     y = mode_result.mode.ravel().astype(np.int64)
 
     # ── 6. Reshape signals ──────────────────────────────────────────────
-    X_flat = windows_df.drop(columns=["win"]).values  # (n_windows, 22*120)
-    n_vars = signal_clean.shape[1]  # should be 22
+    X_flat = windows_df.drop(columns=["win"]).values
+    n_vars = signal_clean.shape[1]
     X = X_flat.reshape(-1, n_vars, WINDOW_SIZE).astype(np.float32)
 
     # ── 7. Validation ────────────────────────────────────────────────────
     assert X.ndim == 3, f"Expected 3-D features, got {X.ndim}-D"
-    assert X.shape[1:] == (22, WINDOW_SIZE), (
-        f"Expected (n, 22, {WINDOW_SIZE}), got {X.shape}"
+    assert X.shape[1:] == (N_FEATURES, WINDOW_SIZE), (
+        f"Expected (n, {N_FEATURES}, {WINDOW_SIZE}), got {X.shape}"
     )
     assert not np.isnan(X).any(), "NaN detected in feature windows"
     assert len(y) == len(X), f"Label/feature count mismatch: {len(y)} vs {len(X)}"
@@ -169,7 +183,7 @@ def save_preprocessed(
         Identifier for the data fold (e.g. ``"train"``, ``"test"``,
         ``"holdout"``, or a fold number).
     X : np.ndarray
-        Feature windows of shape ``(n_windows, 22, 120)``, float32.
+        Feature windows of shape ``(n_windows, N_FEATURES, 120)``, float32.
     y : np.ndarray
         Per-window labels of shape ``(n_windows,)``, int64.
     cache_dir : str
@@ -196,7 +210,7 @@ def load_preprocessed(
     Returns
     -------
     X : np.ndarray
-        Feature windows of shape ``(n_windows, 22, 120)``, float32.
+        Feature windows of shape ``(n_windows, N_FEATURES, 120)``, float32.
     y : np.ndarray
         Per-window labels of shape ``(n_windows,)``, int64.
 
