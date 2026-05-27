@@ -68,7 +68,6 @@ def main() -> None:
     if args.subset < 1.0:
         val_indices = np.random.choice(len(val_ds), int(len(val_ds) * args.subset), replace=False)
         val_ds = Subset(val_ds, val_indices)
-    val_sampler = make_sqrt_balanced_sampler(val_ds, seed=args.seed)
 
     train_loader = DataLoader(
         train_ds, batch_size=args.batch_size,
@@ -77,7 +76,7 @@ def main() -> None:
     )
     val_loader = DataLoader(
         val_ds, batch_size=args.batch_size,
-        sampler=val_sampler,
+        shuffle=False,
         pin_memory=use_cuda, num_workers=0,
     )
 

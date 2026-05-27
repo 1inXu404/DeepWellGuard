@@ -56,7 +56,7 @@ def add_baseline_args(parser: argparse.ArgumentParser) -> None:
 
 
 def build_train_val_loaders(args: argparse.Namespace, use_cuda: bool):
-    """Build train/validation loaders with the project's standard sampler."""
+    """Build a balanced training loader and fixed validation loader."""
     label_map = {orig: new for new, orig in enumerate(RETAINED_CLASSES)}
 
     train_ds = OilWellDataset("results/cache/fold_train_X.npy", "results/cache/fold_train_y.npy")
@@ -79,7 +79,6 @@ def build_train_val_loaders(args: argparse.Namespace, use_cuda: bool):
             replace=False,
         )
         val_ds = Subset(val_ds, val_indices)
-    val_sampler = make_sqrt_balanced_sampler(val_ds, seed=args.seed)
 
     train_loader = DataLoader(
         train_ds,
@@ -91,7 +90,7 @@ def build_train_val_loaders(args: argparse.Namespace, use_cuda: bool):
     val_loader = DataLoader(
         val_ds,
         batch_size=args.batch_size,
-        sampler=val_sampler,
+        shuffle=False,
         pin_memory=use_cuda,
         num_workers=0,
     )
