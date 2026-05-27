@@ -29,7 +29,6 @@ from src.models.ablation import (  # noqa: E402
     get_ablation_config,
 )
 from src.train.evaluate import compute_metrics  # noqa: E402
-from src.train.sampling import make_sqrt_balanced_sampler  # noqa: E402
 from src.train.trainer import Trainer  # noqa: E402
 from src.visualize.plots import plot_comparison_bar, plot_training_curves  # noqa: E402
 from src.utils.config import (  # noqa: E402
@@ -47,7 +46,7 @@ DEFAULT_VARIANTS = ["lstm_channel_attention", "cnn_lstm"]
 
 
 def build_loaders(args, use_cuda: bool):
-    """Build train/val/test DataLoaders with deterministic sampling."""
+    """Build deterministic train/val/test DataLoaders."""
     label_map = {orig: new for new, orig in enumerate(RETAINED_CLASSES)}
 
     train_ds = OilWellDataset(
@@ -67,25 +66,28 @@ def build_loaders(args, use_cuda: bool):
     val_ds.labels = np.array([label_map[lbl] for lbl in val_ds.labels])
     test_ds.labels = np.array([label_map[lbl] for lbl in test_ds.labels])
 
-    num_train_samples = int(len(train_ds) * args.subset)
-    train_sampler = make_sqrt_balanced_sampler(
-        train_ds,
-        num_samples=num_train_samples,
-        seed=args.seed,
-    )
-
     if args.subset < 1.0:
-        val_indices = np.random.choice(
-            len(val_ds),
-            int(len(val_ds) * args.subset),
+        rng = np.random.default_rng(args.seed)
+        train_indices = rng.choice(
+            len(train_ds),
+            max(1, int(len(train_ds) * args.subset)),
             replace=False,
         )
+        val_indices = rng.choice(
+            len(val_ds),
+            max(1, int(len(val_ds) * args.subset)),
+            replace=False,
+        )
+        train_ds = Subset(train_ds, train_indices)
         val_ds = Subset(val_ds, val_indices)
 
+    train_generator = torch.Generator()
+    train_generator.manual_seed(args.seed)
     train_loader = DataLoader(
         train_ds,
         batch_size=args.batch_size,
-        sampler=train_sampler,
+        shuffle=True,
+        generator=train_generator,
         pin_memory=use_cuda,
         num_workers=0,
     )

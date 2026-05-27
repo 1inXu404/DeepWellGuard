@@ -26,7 +26,18 @@ except ImportError:
     def _get_autocast():
         return autocast()
 
-from src.utils.config import EARLY_STOPPING_PATIENCE, LEARNING_RATE, N_CLASSES
+from src.train.sampling import labels_from_dataset
+from src.utils.config import (
+    EARLY_STOPPING_MIN_DELTA,
+    EARLY_STOPPING_PATIENCE,
+    LABEL_SMOOTHING,
+    LEARNING_RATE,
+    LR_SCHEDULER_FACTOR,
+    LR_SCHEDULER_PATIENCE,
+    MIN_LEARNING_RATE,
+    N_CLASSES,
+    WEIGHT_DECAY,
+)
 
 
 class Trainer:
@@ -65,6 +76,12 @@ class Trainer:
         self.patience = cfg.get("patience", EARLY_STOPPING_PATIENCE)
         self.grad_clip = cfg.get("grad_clip", 1.0)
         self.num_classes = cfg.get("num_classes", N_CLASSES)
+        self.weight_decay = cfg.get("weight_decay", WEIGHT_DECAY)
+        self.label_smoothing = cfg.get("label_smoothing", LABEL_SMOOTHING)
+        self.min_delta = cfg.get("min_delta", EARLY_STOPPING_MIN_DELTA)
+        self.scheduler_factor = cfg.get("scheduler_factor", LR_SCHEDULER_FACTOR)
+        self.scheduler_patience = cfg.get("scheduler_patience", LR_SCHEDULER_PATIENCE)
+        self.min_lr = cfg.get("min_lr", MIN_LEARNING_RATE)
 
         # Mixed-precision (AMP) setup — GPU only
         self.use_amp = device.type == "cuda"
@@ -93,6 +110,7 @@ class Trainer:
         """
         self.model.train()
         total_loss = 0.0
+        total_samples = 0
 
         for x, y in dataloader:
             x = x.to(self.device, non_blocking=True)
@@ -120,9 +138,11 @@ class Trainer:
                 )
                 optimizer.step()
 
-            total_loss += loss.item()
+            batch_size = y.size(0)
+            total_loss += loss.item() * batch_size
+            total_samples += batch_size
 
-        return total_loss / len(dataloader)
+        return total_loss / max(total_samples, 1)
 
     def validate(
         self,
@@ -149,13 +169,14 @@ class Trainer:
                 with ctx:
                     logits = self.model(x)
                     loss = criterion(logits, y)
-                total_loss += loss.item()
+                batch_size = y.size(0)
+                total_loss += loss.item() * batch_size
 
                 preds = logits.argmax(dim=1)
                 correct += (preds == y).sum().item()
-                total += y.size(0)
+                total += batch_size
 
-        return total_loss / len(dataloader), correct / total
+        return total_loss / max(total, 1), correct / max(total, 1)
 
     # ------------------------------------------------------------------
     # Full training loop
@@ -189,20 +210,26 @@ class Trainer:
         """
         patience = patience if patience is not None else self.patience
 
-        # We are using WeightedRandomSampler, so no class weights in loss
-        criterion = nn.CrossEntropyLoss()
+        class_weights = self._compute_class_weights(train_loader).to(self.device)
+        train_criterion = nn.CrossEntropyLoss(
+            weight=class_weights,
+            label_smoothing=self.label_smoothing,
+        )
+        val_criterion = nn.CrossEntropyLoss()
 
-        optimizer = torch.optim.Adam(
-            self.model.parameters(), lr=self.learning_rate
+        optimizer = torch.optim.AdamW(
+            self.model.parameters(),
+            lr=self.learning_rate,
+            weight_decay=self.weight_decay,
         )
 
-        # Only apply CosineAnnealingLR to the improved model (CNNLSTMAttention)
-        is_attn_model = self.model.__class__.__name__ == "CNNLSTMAttention"
-        scheduler = None
-        if is_attn_model:
-            scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
-                optimizer, T_max=epochs, eta_min=1e-5
-            )
+        scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
+            optimizer,
+            mode="min",
+            factor=self.scheduler_factor,
+            patience=self.scheduler_patience,
+            min_lr=self.min_lr,
+        )
 
         history: Dict[str, list] = {
             "train_loss": [],
@@ -214,22 +241,19 @@ class Trainer:
         patience_counter = 0
 
         for epoch in range(1, epochs + 1):
-            train_loss = self.train_epoch(train_loader, optimizer, criterion)
-            val_loss, val_acc = self.validate(val_loader, criterion)
+            train_loss = self.train_epoch(train_loader, optimizer, train_criterion)
+            val_loss, val_acc = self.validate(val_loader, val_criterion)
 
-            # Step the learning rate scheduler if it exists
-            if scheduler is not None:
-                scheduler.step()
-                current_lr = scheduler.get_last_lr()[0]
-            else:
-                current_lr = self.learning_rate
+            scheduler.step(val_loss)
+            current_lr = optimizer.param_groups[0]["lr"]
 
             history["train_loss"].append(train_loss)
             history["val_loss"].append(val_loss)
             history["val_acc"].append(val_acc)
 
             # Per-epoch progress
-            best_mark = ' *' if val_loss < best_val_loss else ''
+            improved = val_loss < best_val_loss - self.min_delta
+            best_mark = ' *' if improved else ''
             print(f"  Epoch {epoch:3d}/{epochs} | "
                   f"LR={current_lr:.6f} | "
                   f"train_loss={train_loss:.4f} | "
@@ -237,7 +261,7 @@ class Trainer:
                   f"val_acc={val_acc:.4f}")
 
             # Early-stopping logic based on validation loss
-            if val_loss < best_val_loss:
+            if improved:
                 best_val_loss = val_loss
                 self.best_model_state = copy.deepcopy(self.model.state_dict())
                 patience_counter = 0
@@ -302,10 +326,14 @@ class Trainer:
         Returns:
             Float tensor of shape ``(num_classes,)``.
         """
-        all_labels: list = []
-        for _, y in dataloader:
-            all_labels.append(y.numpy())
-        labels = np.concatenate(all_labels)
+        dataset = getattr(dataloader, "dataset", None)
+        try:
+            labels = labels_from_dataset(dataset)
+        except AttributeError:
+            all_labels: list = []
+            for _, y in dataloader:
+                all_labels.append(y.detach().cpu().numpy())
+            labels = np.concatenate(all_labels)
 
         # Handle non-contiguous labels (e.g. [0,1,3,4,5,6,9] → [0..6])
         class_counts = np.zeros(self.num_classes, dtype=np.int64)

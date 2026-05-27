@@ -14,7 +14,6 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from src.data.dataset import OilWellDataset  # noqa: E402
 from src.models.cnn_lstm_attention import CNNLSTMAttention  # noqa: E402
 from src.train.evaluate import compute_metrics  # noqa: E402
-from src.train.sampling import make_sqrt_balanced_sampler  # noqa: E402
 from src.train.trainer import Trainer  # noqa: E402
 from src.visualize.plots import plot_training_curves  # noqa: E402
 from src.utils.config import BATCH_SIZE, EARLY_STOPPING_PATIENCE, MAX_EPOCHS, RETAINED_CLASSES, SEED, set_global_seed  # noqa: E402
@@ -58,20 +57,27 @@ def main() -> None:
     train_ds.labels = np.array([label_map[lbl] for lbl in train_ds.labels])
     val_ds.labels = np.array([label_map[lbl] for lbl in val_ds.labels])
 
-    num_train_samples = int(len(train_ds) * args.subset)
-    train_sampler = make_sqrt_balanced_sampler(
-        train_ds,
-        num_samples=num_train_samples,
-        seed=args.seed,
-    )
-
     if args.subset < 1.0:
-        val_indices = np.random.choice(len(val_ds), int(len(val_ds) * args.subset), replace=False)
+        rng = np.random.default_rng(args.seed)
+        train_indices = rng.choice(
+            len(train_ds),
+            max(1, int(len(train_ds) * args.subset)),
+            replace=False,
+        )
+        val_indices = rng.choice(
+            len(val_ds),
+            max(1, int(len(val_ds) * args.subset)),
+            replace=False,
+        )
+        train_ds = Subset(train_ds, train_indices)
         val_ds = Subset(val_ds, val_indices)
 
+    train_generator = torch.Generator()
+    train_generator.manual_seed(args.seed)
     train_loader = DataLoader(
         train_ds, batch_size=args.batch_size,
-        sampler=train_sampler,
+        shuffle=True,
+        generator=train_generator,
         pin_memory=use_cuda, num_workers=0,
     )
     val_loader = DataLoader(

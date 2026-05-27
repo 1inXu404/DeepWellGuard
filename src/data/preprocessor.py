@@ -50,9 +50,9 @@ def preprocess_single_file(file_path: str) -> Tuple[np.ndarray, np.ndarray]:
     3. Apply ``default_data_processing()`` for cleanup, Z-score
        normalisation, transient-label mapping, and NaN-filling.
     4. Apply ``Windowing`` (window_size=120, overlap=0.5,
-       pad_last_window=True, boxcar window) to both signals and labels.
-    5. For each label window take the **mode** (most frequent class) as the
-       window-level label.
+       pad_last_window=True, boxcar window) to signals.
+    5. For each label window take the **mode** (most frequent class) over
+       real observed labels only, excluding any signal padding.
     6. Keep only ``SELECTED_SENSOR_COLUMNS`` and reshape the flat signal
        windows into ``(n_windows, N_FEATURES, 120)``.
 
@@ -134,18 +134,18 @@ def preprocess_single_file(file_path: str) -> Tuple[np.ndarray, np.ndarray]:
     )
 
     windows_df = windowing(signal_clean)
-    label_windows_df = windowing(label_clean)     # (n_windows, 120 + 1)
 
     # ── 5. Label aggregation (mode) ─────────────────────────────────────
-    label_cols = [c for c in label_windows_df.columns if c != "win"]
-    label_array = label_windows_df[label_cols].values  # (n_windows, 120)
-    # Guard against residual NaN (shouldn't happen after ffill/bfill, but
-    # defensive)
-    if np.isnan(label_array).any():
-        label_array = np.nan_to_num(label_array, nan=0.0)
-
-    mode_result = scipy_mode(label_array.astype(np.int64), axis=1, keepdims=False)
-    y = mode_result.mode.ravel().astype(np.int64)
+    label_values = label_clean["class"].to_numpy(dtype=np.int64)
+    step = int(WINDOW_SIZE * (1 - OVERLAP))
+    label_modes: list[int] = []
+    for start in range(0, len(label_values), step):
+        label_window = label_values[start:start + WINDOW_SIZE]
+        if len(label_window) == 0:
+            continue
+        mode_result = scipy_mode(label_window, axis=None, keepdims=False)
+        label_modes.append(int(np.asarray(mode_result.mode).item()))
+    y = np.asarray(label_modes, dtype=np.int64)
 
     # ── 6. Reshape signals ──────────────────────────────────────────────
     X_flat = windows_df.drop(columns=["win"]).values
